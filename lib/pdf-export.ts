@@ -396,50 +396,73 @@ function escapeHtml(text: string): string {
  */
 export async function downloadPDF(html: string, filename: string): Promise<void> {
   try {
-    // Web環境での処理
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+    // Platform.OSの値を確認
+    console.log('[PDF] Platform.OS:', Platform.OS);
+    console.log('[PDF] typeof window:', typeof window);
+
+    // Web環境での処理（ブラウザ）
+    if (Platform.OS === 'web') {
+      console.log('[PDF] Web環境での処理を開始');
       try {
-        // ブラウザのダウンロード機能を使用
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${filename}.html`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        return;
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+          const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', `${filename}.html`);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          console.log('[PDF] Web環境でのダウンロード成功');
+          return;
+        }
       } catch (webError) {
-        console.error('Web download error:', webError);
+        console.error('[PDF] Web environment error:', webError);
         Alert.alert('エラー', 'PDFのダウンロードに失敗しました');
         throw webError;
       }
     }
 
-    // React Native環境での処理
-    if (Platform.OS !== 'web') {
+    // React Native環境での処理（iOS/Android）
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      console.log('[PDF] React Native環境での処理を開始');
       try {
         // 動的インポート
-        const FileSystem = await import('expo-file-system');
-        const Sharing = await import('expo-sharing');
+        const FileSystemModule = await import('expo-file-system');
+        const SharingModule = await import('expo-sharing');
 
-        // HTMLファイルを一時ディレクトリに保存
-        const cacheDir = (FileSystem.default as any).cacheDirectory || (FileSystem as any).cacheDirectory;
+        const FileSystem = FileSystemModule.default || FileSystemModule;
+        const Sharing = SharingModule.default || SharingModule;
+
+        console.log('[PDF] モジュール読み込み成功');
+
+        // キャッシュディレクトリを取得
+        const cacheDir = (FileSystem as any).cacheDirectory;
+        if (!cacheDir) {
+          throw new Error('キャッシュディレクトリが取得できません');
+        }
+
         const fileUri = `${cacheDir}${filename}.html`;
+        console.log('[PDF] ファイルパス:', fileUri);
 
-        const writeAsync = (FileSystem.default as any).writeAsStringAsync || (FileSystem as any).writeAsStringAsync;
-        await writeAsync(fileUri, html, {
+        // HTMLファイルを保存
+        await FileSystem.writeAsStringAsync(fileUri, html, {
           encoding: 'utf8',
         });
+        console.log('[PDF] ファイル保存成功');
 
         // Share APIを使用してファイルを共有
-        if (await Sharing.default.isAvailableAsync()) {
-          await Sharing.default.shareAsync(fileUri, {
+        const isAvailable = await Sharing.isAvailableAsync();
+        console.log('[PDF] Share API利用可能:', isAvailable);
+
+        if (isAvailable) {
+          await Sharing.shareAsync(fileUri, {
             mimeType: 'text/html',
             dialogTitle: 'PDFを共有',
           });
+          console.log('[PDF] Share API実行成功');
         } else {
           Alert.alert(
             '共有できません',
@@ -447,13 +470,18 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
           );
         }
       } catch (nativeError) {
-        console.error('React Native error:', nativeError);
-        Alert.alert('エラー', 'PDFの生成に失敗しました: ' + (nativeError instanceof Error ? nativeError.message : '不明なエラー'));
+        console.error('[PDF] React Native error:', nativeError);
+        const errorMessage = nativeError instanceof Error ? nativeError.message : '不明なエラー';
+        Alert.alert('エラー', 'PDFの生成に失敗しました: ' + errorMessage);
         throw nativeError;
       }
     }
+
+    // その他のプラットフォーム
+    console.warn('[PDF] サポートされていないプラットフォーム:', Platform.OS);
+    Alert.alert('エラー', 'このプラットフォームではPDF出力がサポートされていません');
   } catch (error) {
-    console.error('Failed to generate PDF:', error);
+    console.error('[PDF] Failed to generate PDF:', error);
     throw error;
   }
 }
