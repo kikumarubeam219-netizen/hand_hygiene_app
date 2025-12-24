@@ -345,13 +345,20 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
 
         console.log('[PDF] モジュール読み込み成功');
 
-        // キャッシュディレクトリを取得
-        const cacheDir = (FileSystem as any).cacheDirectory;
-        if (!cacheDir) {
-          throw new Error('キャッシュディレクトリが取得できません');
+        // キャッシュディレクトリを取得（複数の方法を試行）
+        let fileDir = (FileSystem as any).cacheDirectory;
+        
+        // キャッシュディレクトリが利用できない場合はドキュメントディレクトリを使用
+        if (!fileDir) {
+          fileDir = (FileSystem as any).documentDirectory;
+        }
+        
+        // それでも取得できない場合はエラー
+        if (!fileDir) {
+          throw new Error('ファイルディレクトリが取得できません。キャッシュディレクトリとドキュメントディレクトリの両方が利用できません');
         }
 
-        const fileUri = `${cacheDir}${filename}.html`;
+        const fileUri = `${fileDir}${filename}.html`;
         console.log('[PDF] ファイルパス:', fileUri);
 
         // HTMLファイルを保存
