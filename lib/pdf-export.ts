@@ -299,7 +299,7 @@ export function generateObservationFormHTML(
 /**
  * HTMLをダウンロード
  * Web環境ではブラウザのダウンロード機能を使用
- * React Native環境ではファイルシステムに保存してShare APIで共有
+ * React Native環境ではデータURLで表示
  */
 export async function downloadPDF(html: string, filename: string): Promise<void> {
   try {
@@ -336,51 +336,21 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
       console.log('[PDF] React Native環境での処理を開始');
       try {
         // モジュールを動的インポート
-        const FileSystem = await import('expo-file-system');
-        const Sharing = await import('expo-sharing');
-
-        const fs = FileSystem.default || FileSystem;
-        const sharing = Sharing.default || Sharing;
+        const WebBrowser = await import('expo-web-browser');
+        const browser = WebBrowser.default || WebBrowser;
 
         console.log('[PDF] モジュール読み込み成功');
 
-        // ドキュメントディレクトリを取得
-        const documentDir = (fs as any).documentDirectory;
-        if (!documentDir) {
-          throw new Error('ドキュメントディレクトリが取得できません');
-        }
+        // HTMLをBase64エンコード
+        const base64Html = Buffer.from(html).toString('base64');
+        const dataUrl = `data:text/html;base64,${base64Html}`;
 
-        console.log('[PDF] ドキュメントディレクトリ:', documentDir);
+        console.log('[PDF] データURL生成成功');
 
-        // ファイルパスを生成
-        const filePath = `${documentDir}${filename}.html`;
-        console.log('[PDF] ファイルパス:', filePath);
+        // WebBrowserで表示
+        await (browser as any).openBrowserAsync(dataUrl);
 
-        // HTMLをファイルに保存
-        await (fs as any).writeAsStringAsync(filePath, html, {
-          encoding: 'utf8',
-        });
-        console.log('[PDF] ファイル保存成功:', filePath);
-
-        // Share APIが利用可能か確認
-        const isAvailable = await (sharing as any).isAvailableAsync();
-        console.log('[PDF] Share API利用可能:', isAvailable);
-
-        if (!isAvailable) {
-          Alert.alert(
-            '共有できません',
-            'このデバイスでは共有機能が利用できません。'
-          );
-          return;
-        }
-
-        // Share APIでファイルを共有
-        await (sharing as any).shareAsync(filePath, {
-          mimeType: 'text/html',
-          dialogTitle: 'PDFレポートを共有',
-        });
-
-        console.log('[PDF] Share API使用成功');
+        console.log('[PDF] WebBrowser表示成功');
       } catch (nativeError) {
         console.error('[PDF] React Native error:', nativeError);
 
