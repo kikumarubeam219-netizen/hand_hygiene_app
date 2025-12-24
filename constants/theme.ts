@@ -5,8 +5,17 @@
 
 import { Platform } from "react-native";
 
-const tintColorLight = "#0a7ea4";
+const tintColorLight = "#4ECDC4";
 const tintColorDark = "#fff";
+
+// 5つのタイミング別カラー
+export const TimingColors = {
+  timing1: "#FF6B6B",
+  timing2: "#4ECDC4",
+  timing3: "#FFE66D",
+  timing4: "#95E1D3",
+  timing5: "#C7CEEA",
+};
 
 export const Colors = {
   light: {
@@ -16,6 +25,11 @@ export const Colors = {
     icon: "#687076",
     tabIconDefault: "#687076",
     tabIconSelected: tintColorLight,
+    card: "#F5F5F5",
+    border: "#E0E0E0",
+    success: "#34C759",
+    warning: "#FF9500",
+    error: "#FF3B30",
   },
   dark: {
     text: "#ECEDEE",
@@ -24,6 +38,11 @@ export const Colors = {
     icon: "#9BA1A6",
     tabIconDefault: "#9BA1A6",
     tabIconSelected: tintColorDark,
+    card: "#2A2A2A",
+    border: "#404040",
+    success: "#34C759",
+    warning: "#FF9500",
+    error: "#FF3B30",
   },
 };
 
