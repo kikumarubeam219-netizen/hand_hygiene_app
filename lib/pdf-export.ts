@@ -390,18 +390,22 @@ function escapeHtml(text: string): string {
 
 /**
  * HTMLをPDFに変換してダウンロード
+ * React Native環境とWeb環境の両方に対応
  */
 export async function downloadPDF(html: string, filename: string): Promise<void> {
   try {
-    // ブラウザ環境でのPDF生成
-    if (typeof window !== 'undefined') {
-      // html2pdfライブラリを使用する場合のコード
-      // ここではシンプルなPrint to PDFを使用
+    // Web環境での処理
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      // 新しいウィンドウを開く
       const printWindow = window.open('', '', 'width=800,height=600');
       if (printWindow) {
         printWindow.document.write(html);
         printWindow.document.close();
-        printWindow.print();
+        
+        // 少し遅延させてから印刷ダイアログを表示
+        setTimeout(() => {
+          printWindow.print();
+        }, 250);
       }
     }
   } catch (error) {

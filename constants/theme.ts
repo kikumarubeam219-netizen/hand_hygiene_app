@@ -9,12 +9,14 @@ const tintColorLight = "#4ECDC4";
 const tintColorDark = "#fff";
 
 // 5つのタイミング別カラー
-export const TimingColors = {
-  timing1: "#FF6B6B",
-  timing2: "#4ECDC4",
-  timing3: "#FFE66D",
-  timing4: "#95E1D3",
-  timing5: "#C7CEEA",
+import { TimingType } from '@/lib/types';
+
+export const TimingColors: Record<TimingType, string> = {
+  1: "#FF6B6B",
+  2: "#4ECDC4",
+  3: "#FFE66D",
+  4: "#95E1D3",
+  5: "#C7CEEA",
 };
 
 export const Colors = {

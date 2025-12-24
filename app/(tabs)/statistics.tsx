@@ -69,6 +69,16 @@ export default function StatisticsScreen() {
   const { startDate, endDate } = getDateRange(period);
   const stats = useMemo(() => getStatistics(startDate, endDate), [period, records, customStartDate, customEndDate]);
 
+  // タイミング別実施率を計算
+  const getTimingCompletionRate = (timing: TimingType) => {
+    const timingRecords = records.filter(
+      (r) => r.timing === timing && r.timestamp >= startDate.getTime() && r.timestamp <= endDate.getTime()
+    );
+    if (timingRecords.length === 0) return 0;
+    const completedCount = timingRecords.filter((r) => r.action !== 'no_action').length;
+    return Math.round((completedCount / timingRecords.length) * 100);
+  };
+
   // 期間ラベルを取得
   const getPeriodLabel = () => {
     if (period === 'day') {
@@ -105,223 +115,236 @@ export default function StatisticsScreen() {
         </ThemedText>
       </View>
 
-      {/* 期間選択 */}
-      <View style={styles.periodSelector}>
-        {(['day', 'week', 'month'] as PeriodType[]).map((p) => (
-          <Pressable
-            key={p}
-            onPress={() => setPeriod(p)}
-            style={[
-              styles.periodButton,
-              period === p && [
-                styles.periodButtonActive,
-                { backgroundColor: colors.tint },
-              ],
-              { borderColor: colors.border },
-            ]}
-          >
-            <ThemedText
-              type="defaultSemiBold"
-              style={{
-                color: period === p ? '#fff' : colors.text,
-              }}
-            >
-              {p === 'day' ? '日' : p === 'week' ? '週' : '月'}
-            </ThemedText>
-          </Pressable>
-        ))}
-        <Pressable
-          onPress={() => setDatePickerVisible(true)}
-          style={[
-            styles.periodButton,
-            period === 'custom' && [
-              styles.periodButtonActive,
-              { backgroundColor: colors.tint },
-            ],
-            { borderColor: colors.border },
-          ]}
-        >
-          <ThemedText
-            type="defaultSemiBold"
-            style={{
-              color: period === 'custom' ? '#fff' : colors.text,
-              fontSize: 11,
-            }}
-          >
-            期間指定
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* 期間選択 */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            期間選択
           </ThemedText>
-        </Pressable>
-      </View>
 
-      {/* 期間表示とCSV出力 */}
-      <View style={styles.periodDisplay}>
-        <View style={{ flex: 1 }}>
-          <ThemedText type="default" style={{ opacity: 0.7 }}>
+          <View style={styles.periodButtons}>
+            {(['day', 'week', 'month'] as const).map((p) => (
+              <Pressable
+                key={p}
+                onPress={() => setPeriod(p)}
+                style={[
+                  styles.periodButton,
+                  {
+                    backgroundColor: period === p ? colors.tint : colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <ThemedText
+                  type="defaultSemiBold"
+                  style={{
+                    color: period === p ? '#fff' : colors.text,
+                    fontSize: 12,
+                  }}
+                >
+                  {p === 'day' ? '今日' : p === 'week' ? '今週' : '今月'}
+                </ThemedText>
+              </Pressable>
+            ))}
+
+            <Pressable
+              onPress={() => setDatePickerVisible(true)}
+              style={[
+                styles.periodButton,
+                {
+                  backgroundColor: period === 'custom' ? colors.tint : colors.card,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <ThemedText
+                type="defaultSemiBold"
+                style={{
+                  color: period === 'custom' ? '#fff' : colors.text,
+                  fontSize: 12,
+                }}
+              >
+                期間指定
+              </ThemedText>
+            </Pressable>
+          </View>
+
+          <ThemedText type="default" style={styles.periodLabel}>
             {getPeriodLabel()}
           </ThemedText>
         </View>
-        <Pressable
-          onPress={handleExportCSV}
-          style={[
-            styles.exportButton,
-            { backgroundColor: colors.tint },
-          ]}
-        >
-          <ThemedText type="defaultSemiBold" style={{ color: '#fff', fontSize: 12 }}>
-            CSV出力
-          </ThemedText>
-        </Pressable>
-      </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* 合計実施数 */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <ThemedText type="subtitle">合計実施数</ThemedText>
-          <ThemedText type="title" style={{ fontSize: 40, marginTop: 8 }}>
-            {stats.total}
-            <ThemedText type="default" style={{ fontSize: 16 }}>回</ThemedText>
+        {/* 日付ピッカー */}
+        {datePickerVisible && (
+          <DateRangePicker
+            visible={datePickerVisible}
+            startDate={customStartDate}
+            endDate={customEndDate}
+            onConfirm={handleCustomDateRange}
+            onCancel={() => setDatePickerVisible(false)}
+          />
+        )}
+
+        {/* 総実施数 */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            実施数
           </ThemedText>
+
+          <View
+            style={[
+              styles.statsCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.statRow}>
+              <ThemedText type="default">総実施数</ThemedText>
+              <ThemedText type="title" style={{ fontSize: 24, color: colors.tint }}>
+                {stats.total}
+              </ThemedText>
+            </View>
+
+            <View style={[styles.statRow, { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 }]}>
+              <ThemedText type="default">実施率</ThemedText>
+              <ThemedText type="title" style={{ fontSize: 24, color: colors.tint }}>
+                {stats.total > 0
+                  ? Math.round(
+                      ((stats.byAction.hand_sanitizer + stats.byAction.hand_wash) / stats.total) * 100
+                    )
+                  : 0}
+                %
+              </ThemedText>
+            </View>
+          </View>
         </View>
 
-        {/* タイミング別統計 */}
+        {/* 実施内容別の円グラフ */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            実施内容別実施率
+          </ThemedText>
+
+          {stats.total > 0 ? (
+            <View style={styles.chartContainer}>
+              <PieChart
+                data={[
+                  { label: '手指消毒', value: stats.byAction.hand_sanitizer, color: '#FF6B6B' },
+                  { label: '手洗い', value: stats.byAction.hand_wash, color: '#4ECDC4' },
+                  { label: '実施なし', value: stats.byAction.no_action, color: '#E0E0E0' },
+                ]}
+              />
+            </View>
+          ) : (
+            <ThemedText type="default" style={styles.emptyText}>
+              この期間のデータはありません
+            </ThemedText>
+          )}
+        </View>
+
+        {/* タイミング別実施率 */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            タイミング別実施率
+          </ThemedText>
+
+          <View style={styles.timingRatesContainer}>
+            {([1, 2, 3, 4, 5] as const).map((timing) => {
+              const rate = getTimingCompletionRate(timing);
+              const timingInfo = TIMING_INFO[timing];
+              const timingColor = TimingColors[timing];
+
+              return (
+                <View
+                  key={timing}
+                  style={[
+                    styles.timingRateCard,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.timingRateHeader}>
+                    <View
+                      style={[
+                        styles.timingDot,
+                        { backgroundColor: timingColor },
+                      ]}
+                    />
+                    <View style={styles.timingInfo}>
+                      <ThemedText type="defaultSemiBold" style={{ fontSize: 13 }}>
+                        {timing}. {timingInfo.name}
+                      </ThemedText>
+                      <ThemedText type="default" style={{ fontSize: 11, opacity: 0.7 }}>
+                        {timingInfo.description}
+                      </ThemedText>
+                    </View>
+                  </View>
+
+                  <View style={styles.rateBar}>
+                    <View
+                      style={[
+                        styles.rateBarFill,
+                        {
+                          width: `${rate}%`,
+                          backgroundColor: timingColor,
+                        },
+                      ]}
+                    />
+                  </View>
+
+                  <ThemedText type="defaultSemiBold" style={{ fontSize: 14, color: timingColor }}>
+                    {rate}%
+                  </ThemedText>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* タイミング別実施数 */}
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
             タイミング別実施数
           </ThemedText>
 
-          {([1, 2, 3, 4, 5] as TimingType[]).map((timing) => {
-            const count = stats.byTiming[timing];
-            const color = Object.values(TimingColors)[timing - 1];
-            const info = TIMING_INFO[timing];
-
-            return (
-              <View key={timing} style={styles.statRow}>
-                <View style={[styles.statBadge, { backgroundColor: color }]}>
-                  <ThemedText
-                    type="defaultSemiBold"
-                    style={{ color: '#fff', fontSize: 12 }}
-                  >
-                    {timing}
-                  </ThemedText>
-                </View>
-                <View style={styles.statInfo}>
-                  <ThemedText type="default">{info.name}</ThemedText>
-                  <ThemedText type="default" style={{ opacity: 0.6, fontSize: 12 }}>
-                    {info.description}
-                  </ThemedText>
-                </View>
-                <ThemedText type="defaultSemiBold" style={{ fontSize: 18 }}>
-                  {count}
+          <View
+            style={[
+              styles.statsCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            {([1, 2, 3, 4, 5] as const).map((timing, index) => (
+              <View
+                key={timing}
+                style={[
+                  styles.statRow,
+                  index > 0 && { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 },
+                ]}
+              >
+                <ThemedText type="default">
+                  {timing}. {TIMING_INFO[timing].name}
+                </ThemedText>
+                <ThemedText type="defaultSemiBold">
+                  {stats.byTiming[timing] || 0}件
                 </ThemedText>
               </View>
-            );
-          })}
+            ))}
+          </View>
         </View>
 
-        {/* 実施率 - 円グラフ */}
-        {stats.total > 0 && (
-          <View style={styles.section}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              実施内容別実施率
+        {/* CSV出力 */}
+        <View style={styles.section}>
+          <Pressable
+            onPress={handleExportCSV}
+            style={[
+              styles.button,
+              { backgroundColor: '#95E1D3' },
+            ]}
+          >
+            <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>
+              CSVをダウンロード
             </ThemedText>
-
-            <View
-              style={[
-                styles.card,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <PieChart
-                data={[
-                  {
-                    label: '手指消毒',
-                    value: stats.byAction.hand_sanitizer,
-                    color: '#FF6B6B',
-                  },
-                  {
-                    label: '手洗い',
-                    value: stats.byAction.hand_wash,
-                    color: '#4ECDC4',
-                  },
-                  {
-                    label: '実施なし',
-                    value: stats.byAction.no_action,
-                    color: '#E8E8E8',
-                  },
-                ]}
-                size={240}
-                showLegend={true}
-                showPercentage={true}
-              />
-            </View>
-          </View>
-        )}
-
-        {/* 実施率 - 数値表示 */}
-        {stats.total > 0 && (
-          <View style={styles.section}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              実施率（数値）
-            </ThemedText>
-
-            <View
-              style={[
-                styles.card,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <View style={styles.rateRow}>
-                <ThemedText type="default">手指消毒率</ThemedText>
-                <ThemedText type="defaultSemiBold">
-                  {Math.round(
-                    (stats.byAction.hand_sanitizer / stats.total) * 100
-                  )}%
-                </ThemedText>
-              </View>
-              <View
-                style={[
-                  styles.rateRow,
-                  { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 },
-                ]}
-              >
-                <ThemedText type="default">手洗い率</ThemedText>
-                <ThemedText type="defaultSemiBold">
-                  {Math.round((stats.byAction.hand_wash / stats.total) * 100)}%
-                </ThemedText>
-              </View>
-              <View
-                style={[
-                  styles.rateRow,
-                  { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 },
-                ]}
-              >
-                <ThemedText type="default">実施率</ThemedText>
-                <ThemedText type="defaultSemiBold">
-                  {Math.round(
-                    ((stats.byAction.hand_sanitizer + stats.byAction.hand_wash) /
-                      stats.total) *
-                      100
-                  )}%
-                </ThemedText>
-              </View>
-            </View>
-          </View>
-        )}
+          </Pressable>
+        </View>
       </ScrollView>
-
-      {/* 日付範囲ピッカー */}
-      <DateRangePicker
-        visible={datePickerVisible}
-        startDate={customStartDate}
-        endDate={customEndDate}
-        onConfirm={handleCustomDateRange}
-        onCancel={() => setDatePickerVisible(false)}
-      />
     </ThemedView>
   );
 }
@@ -333,72 +356,94 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 20,
   },
-  periodSelector: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 16,
-    flexWrap: 'wrap',
-  },
-  periodButton: {
-    flex: 1,
-    minWidth: '20%',
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  periodButtonActive: {
-    borderWidth: 0,
-  },
-  periodDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-    paddingHorizontal: 12,
-  },
-  exportButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
   content: {
     flex: 1,
   },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
-  },
   section: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
     marginBottom: 12,
     fontSize: 18,
   },
-  statRow: {
+  periodButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
+    gap: 8,
+    marginBottom: 12,
+    flexWrap: 'wrap',
   },
-  statBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  periodButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    minHeight: 36,
   },
-  statInfo: {
-    flex: 1,
+  periodLabel: {
+    fontSize: 13,
+    opacity: 0.7,
+    marginTop: 8,
   },
-  rateRow: {
+  statsCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+  },
+  statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
+  },
+  chartContainer: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  emptyText: {
+    textAlign: 'center',
+    opacity: 0.6,
+    paddingVertical: 24,
+  },
+  timingRatesContainer: {
+    gap: 12,
+  },
+  timingRateCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+  },
+  timingRateHeader: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  timingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  timingInfo: {
+    flex: 1,
+  },
+  rateBar: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  rateBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  button: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 44,
   },
 });

@@ -86,14 +86,26 @@ export default function SettingsScreen() {
         endDate
       );
 
-      // ブラウザでHTMLを表示してPDF印刷できるようにする
-      if (typeof window !== 'undefined') {
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+      // ブラウザ環境でのPDF表示
+      try {
+        const printWindow = window.open('', '', 'width=900,height=700');
+        if (printWindow) {
+          printWindow.document.write(html);
+          printWindow.document.close();
+          
+          // 少し遅延させてから印刷ダイアログを表示
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
+          
+          Alert.alert('成功', 'PDFを生成しました。ブラウザで表示されます。\n印刷ダイアログからPDFとして保存できます。');
+        } else {
+          Alert.alert('エラー', 'ブラウザウィンドウを開けませんでした。ポップアップをブロックしていないか確認してください。');
+        }
+      } catch (windowError) {
+        console.error('Window open error:', windowError);
+        Alert.alert('エラー', 'ブラウザウィンドウの作成に失敗しました。');
       }
-
-      Alert.alert('成功', 'PDFを生成しました。ブラウザで表示されます。');
     } catch (error) {
       console.error('Failed to generate PDF:', error);
       Alert.alert('エラー', 'PDFの生成に失敗しました');
