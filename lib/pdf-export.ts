@@ -101,11 +101,12 @@ export function generateObservationFormHTML(
     
     .header h1 {
       font-size: 24px;
-      margin-bottom: 5px;
+      margin-bottom: 10px;
+      color: #333;
     }
     
     .header p {
-      font-size: 14px;
+      font-size: 12px;
       color: #666;
     }
     
@@ -113,90 +114,64 @@ export function generateObservationFormHTML(
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 15px;
-      margin-bottom: 30px;
-      padding: 15px;
-      background-color: #f9f9f9;
-      border-radius: 5px;
+      margin-bottom: 20px;
+      font-size: 13px;
     }
     
     .info-item {
       display: flex;
       justify-content: space-between;
       border-bottom: 1px solid #ddd;
-      padding-bottom: 8px;
+      padding-bottom: 5px;
     }
     
     .info-label {
       font-weight: bold;
-      color: #333;
+      min-width: 100px;
     }
     
     .info-value {
-      color: #666;
+      flex: 1;
+      text-align: right;
+      padding-right: 10px;
     }
     
-    .observation-table {
+    table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 30px;
+      margin-top: 20px;
+      font-size: 13px;
     }
     
-    .observation-table th,
-    .observation-table td {
+    th {
+      background-color: #f0f0f0;
       border: 1px solid #999;
-      padding: 12px;
+      padding: 10px;
       text-align: left;
-    }
-    
-    .observation-table th {
-      background-color: #e8d4c0;
       font-weight: bold;
-      color: #333;
     }
     
-    .item-row {
+    td {
+      border: 1px solid #999;
+      padding: 10px;
       background-color: #ffffff;
     }
     
-    .item-number {
-      font-weight: bold;
-      color: #333;
-      min-width: 40px;
-    }
-    
-    .timing-name {
-      font-weight: bold;
-      color: #333;
-    }
-    
-    .action-name {
-      color: #666;
+    tr:nth-child(even) td {
+      background-color: #ffffff;
     }
     
     .footer {
+      margin-top: 20px;
       text-align: center;
-      margin-top: 30px;
-      padding-top: 15px;
-      border-top: 1px solid #ddd;
-      font-size: 12px;
+      font-size: 11px;
       color: #999;
+      border-top: 1px solid #ddd;
+      padding-top: 10px;
     }
     
     .print-button {
-      display: block;
-      margin: 20px auto;
-      padding: 12px 30px;
-      background-color: #007AFF;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      font-size: 16px;
-      cursor: pointer;
-      text-align: center;
-    }
-    
-    .print-button:hover {
-      background-color: #0051D5;
+      display: none;
     }
     
     @media print {
@@ -208,10 +183,7 @@ export function generateObservationFormHTML(
       .container {
         box-shadow: none;
         padding: 0;
-      }
-      
-      .print-button {
-        display: none;
+        max-width: 100%;
       }
     }
   </style>
@@ -219,8 +191,8 @@ export function generateObservationFormHTML(
 <body>
   <div class="container">
     <div class="header">
-      <h1>泉州感染防止ネットワーク</h1>
-      <p>手指衛生直接観察用フォーム</p>
+      <h1>手指衛生直接観察用フォーム</h1>
+      <p>WHO手指衛生5つのタイミング観察記録</p>
     </div>
     
     <div class="facility-info">
@@ -241,14 +213,6 @@ export function generateObservationFormHTML(
         <span class="info-value">${facilityInfo.section}</span>
       </div>
       <div class="info-item">
-        <span class="info-label">期間番号:</span>
-        <span class="info-value">${facilityInfo.periodNumber}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">日付:</span>
-        <span class="info-value">${facilityInfo.date}</span>
-      </div>
-      <div class="info-item">
         <span class="info-label">観察者:</span>
         <span class="info-value">${facilityInfo.observer}</span>
       </div>
@@ -256,26 +220,34 @@ export function generateObservationFormHTML(
         <span class="info-label">住所:</span>
         <span class="info-value">${facilityInfo.address}</span>
       </div>
+      <div class="info-item">
+        <span class="info-label">観察日:</span>
+        <span class="info-value">${facilityInfo.date}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">セッション:</span>
+        <span class="info-value">${facilityInfo.sessionNumber}</span>
+      </div>
     </div>
     
-    <table class="observation-table">
+    <table>
       <thead>
         <tr>
-          <th style="width: 10%">No.</th>
-          <th style="width: 40%">タイミング</th>
-          <th style="width: 50%">実施内容</th>
+          <th style="width: 10%;">No.</th>
+          <th style="width: 40%;">タイミング</th>
+          <th style="width: 50%;">実施内容</th>
         </tr>
       </thead>
       <tbody>
 `;
 
-  // テーブル行を追加（実施順序）
+  // テーブル行を追加
   tableRows.forEach((row) => {
     html += `
-        <tr class="item-row">
-          <td class="item-number">${row.itemNum}</td>
-          <td><span class="timing-name">${row.timingName}</span></td>
-          <td><span class="action-name">${row.actionName}</span></td>
+        <tr>
+          <td style="text-align: center;">${row.itemNum}</td>
+          <td>${row.timingName}</td>
+          <td>${row.actionName}</td>
         </tr>
 `;
   });
@@ -297,9 +269,9 @@ export function generateObservationFormHTML(
 }
 
 /**
- * HTMLをダウンロード
- * Web環境ではブラウザのダウンロード機能を使用
- * React Native環境ではデータURLで表示
+ * HTMLをPDFに変換してダウンロード
+ * Web環境ではブラウザの印刷機能でPDF化
+ * React Native環境ではHTMLをクリップボードにコピー
  */
 export async function downloadPDF(html: string, filename: string): Promise<void> {
   try {
@@ -311,22 +283,27 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
       console.log('[PDF] Web環境での処理を開始');
       try {
         if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-          const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-          const link = document.createElement('a');
-          const url = URL.createObjectURL(blob);
-          link.setAttribute('href', url);
-          link.setAttribute('download', `${filename}.html`);
-          link.style.visibility = 'hidden';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          console.log('[PDF] Web環境でのダウンロード成功');
+          // 新しいウィンドウでHTMLを開く
+          const newWindow = window.open('', '_blank');
+          if (newWindow) {
+            newWindow.document.write(html);
+            newWindow.document.close();
+            
+            // 少し遅延してから印刷ダイアログを表示
+            setTimeout(() => {
+              newWindow.print();
+              console.log('[PDF] 印刷ダイアログを表示');
+            }, 250);
+            
+            console.log('[PDF] Web環境でのPDF生成成功');
+          } else {
+            throw new Error('ポップアップウィンドウを開くことができません');
+          }
           return;
         }
       } catch (webError) {
         console.error('[PDF] Web environment error:', webError);
-        Alert.alert('エラー', 'PDFのダウンロードに失敗しました');
+        Alert.alert('エラー', 'PDFの生成に失敗しました');
         throw webError;
       }
     }
@@ -391,12 +368,7 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
       Alert.alert('エラー', 'このプラットフォームではPDF出力がサポートされていません');
     }
   } catch (error) {
-    console.error('[PDF] Failed to generate PDF:', error);
-    throw error;
+    console.error('[PDF] Unexpected error:', error);
+    Alert.alert('エラー', 'PDFの生成中に予期しないエラーが発生しました');
   }
-}
-
-export function getPDFFilename(startDate: Date): string {
-  const dateStr = startDate.toISOString().split('T')[0];
-  return `hygiene_observation_form_${dateStr}`;
 }

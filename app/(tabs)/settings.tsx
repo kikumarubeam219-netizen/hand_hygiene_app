@@ -7,7 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useHygieneStorage } from '@/hooks/use-hygiene-storage';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { generateObservationFormHTML, downloadPDF, getPDFFilename } from '@/lib/pdf-export';
+import { generateObservationFormHTML, downloadPDF } from '@/lib/pdf-export';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -91,7 +91,7 @@ export default function SettingsScreen() {
       );
 
       // HTMLをダウンロード
-      const filename = getPDFFilename(today);
+      const filename = `手指衰理記録_${today.toISOString().split('T')[0]}`;
       await downloadPDF(html, filename);
 
       Alert.alert('成功', 'PDFを生成しました。ファイルを共有できます。');
