@@ -22,6 +22,12 @@ const TIMINGS = {
   5: { name: '患者周辺物品接触後', description: '患者周辺物品に接触した後' },
 };
 
+const ACTIONS = {
+  hand_sanitizer: '手指消毒',
+  hand_wash: '手洗い',
+  no_action: '実施なし',
+};
+
 /**
  * 観察フォーム形式のHTMLを生成
  */
@@ -51,6 +57,44 @@ export function generateObservationFormHTML(
     }
     recordsByDate[dateKey].push(record);
   });
+
+  // 全セッションのタイミング・アクション組み合わせを生成
+  const allCombinations: Array<{
+    sessionNum: number;
+    timing: number;
+    action: string;
+    timingName: string;
+    actionName: string;
+    isRecorded: boolean;
+  }> = [];
+
+  let itemNum = 1;
+  let sessionNum = 0;
+  for (const dateKey of Object.keys(recordsByDate).sort().slice(0, 8)) {
+    sessionNum++;
+    const sessionRecords = recordsByDate[dateKey];
+
+    // 5つのタイミングそれぞれに対して、3つのアクションを作成
+    for (let timing = 1; timing <= 5; timing++) {
+      const timingInfo = TIMINGS[timing as keyof typeof TIMINGS];
+      const timingRecords = sessionRecords.filter((r) => r.timing === timing);
+
+      // 3つのアクションを個別項目として追加
+      for (const actionKey of ['hand_sanitizer', 'hand_wash', 'no_action']) {
+        const actionName = ACTIONS[actionKey as keyof typeof ACTIONS];
+        const isRecorded = timingRecords.some((r) => r.action === actionKey);
+
+        allCombinations.push({
+          sessionNum,
+          timing,
+          action: actionKey,
+          timingName: timingInfo.name,
+          actionName,
+          isRecorded,
+        });
+      }
+    }
+  }
 
   // HTMLを生成
   let html = `<!DOCTYPE html>
@@ -143,8 +187,18 @@ export function generateObservationFormHTML(
       color: #333;
     }
     
-    .session-row {
+    .item-row {
       background-color: #fff5f0;
+    }
+    
+    .item-row.checked {
+      background-color: #e8f5e9;
+    }
+    
+    .item-number {
+      font-weight: bold;
+      color: #333;
+      min-width: 40px;
     }
     
     .timing-name {
@@ -152,9 +206,8 @@ export function generateObservationFormHTML(
       color: #333;
     }
     
-    .action-icon {
-      display: inline-block;
-      margin-right: 5px;
+    .action-name {
+      color: #666;
     }
     
     .checkbox-checked::before {
@@ -256,56 +309,29 @@ export function generateObservationFormHTML(
     <table class="observation-table">
       <thead>
         <tr>
-          <th style="width: 30%">セッション/タイミング</th>
-          <th style="width: 20%">適応</th>
-          <th style="width: 50%">手指衛生実施内容</th>
+          <th style="width: 8%">No.</th>
+          <th style="width: 35%">タイミング</th>
+          <th style="width: 30%">実施内容</th>
+          <th style="width: 27%">チェック</th>
         </tr>
       </thead>
       <tbody>
 `;
 
-  // セッションデータを生成（最大8セッション）
-  let sessionNum = 0;
-  for (const dateKey of Object.keys(recordsByDate).sort().slice(0, 8)) {
-    sessionNum++;
-    const sessionRecords = recordsByDate[dateKey];
+  // 全組み合わせをテーブルに追加
+  allCombinations.forEach((item, index) => {
+    const rowClass = item.isRecorded ? 'item-row checked' : 'item-row';
+    const checkboxClass = item.isRecorded ? 'checkbox-checked' : 'checkbox-unchecked';
 
-    // 5つのタイミングの行を生成
-    for (let timing = 1; timing <= 5; timing++) {
-      const timingRecords = sessionRecords.filter((r) => r.timing === timing);
-      const timingInfo = TIMINGS[timing as keyof typeof TIMINGS];
-
-      const applicable = timingRecords.length > 0 ? '☑' : '☐';
-
-      let actionHtml = '';
-      if (timingRecords.length === 0) {
-        actionHtml = '☐手指消毒 ☐手洗い ☐実施なし';
-      } else {
-        const actions: string[] = [];
-        for (const record of timingRecords) {
-          if (record.action === 'hand_sanitizer') {
-            actions.push('☑手指消毒');
-          } else if (record.action === 'hand_wash') {
-            actions.push('☑手洗い');
-          } else if (record.action === 'no_action') {
-            actions.push('☑実施なし');
-          }
-        }
-        actionHtml = actions.join(' ');
-      }
-
-      html += `
-        <tr class="session-row">
-          <td>
-            <span class="timing-name">${sessionNum}. ${timingInfo.name}</span><br>
-            <small>${timingInfo.description}</small>
-          </td>
-          <td style="text-align: center; font-size: 18px;">${applicable}</td>
-          <td>${actionHtml}</td>
+    html += `
+        <tr class="${rowClass}">
+          <td class="item-number">${index + 1}</td>
+          <td><span class="timing-name">${item.timingName}</span></td>
+          <td><span class="action-name">${item.actionName}</span></td>
+          <td><span class="${checkboxClass}"></span></td>
         </tr>
 `;
-    }
-  }
+  });
 
   html += `
       </tbody>
