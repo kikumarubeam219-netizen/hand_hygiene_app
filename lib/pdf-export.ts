@@ -342,25 +342,38 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
         console.log('[PDF] モジュール読み込み成功');
 
         // HTMLをBase64エンコード
-        const base64Html = Buffer.from(html).toString('base64');
+        // React Native環境ではBufferが使用できないため、btoa関数を使用
+        let base64Html: string;
+        if (typeof btoa !== 'undefined') {
+          // ブラウザ環境またはReact Native環境
+          base64Html = btoa(unescape(encodeURIComponent(html)));
+        } else if (typeof Buffer !== 'undefined') {
+          // Node.js環境
+          base64Html = Buffer.from(html).toString('base64');
+        } else {
+          throw new Error('Base64エンコードが利用できません');
+        }
         const dataUrl = `data:text/html;base64,${base64Html}`;
 
-        console.log('[PDF] データURL生成成功');
+        console.log('[PDF] データURL生成成功:', dataUrl.substring(0, 50) + '...');
 
         // WebBrowserで表示
+        console.log('[PDF] WebBrowserで表示を試行');
         await (browser as any).openBrowserAsync(dataUrl);
 
         console.log('[PDF] WebBrowser表示成功');
       } catch (nativeError) {
         console.error('[PDF] React Native error:', nativeError);
+        console.error('[PDF] エラースタック:', nativeError instanceof Error ? nativeError.stack : '不明');
 
         // フォールバック: Alertで情報を表示
         const errorMessage = nativeError instanceof Error ? nativeError.message : '不明なエラー';
         console.log('[PDF] フォールバック処理を実行:', errorMessage);
+        console.log('[PDF] HTMLの長さ:', html.length);
 
         Alert.alert(
           'PDFレポート生成完了',
-          'PDFレポートの生成に成功しました。\n\nブラウザで表示するか、メールで送信してください。\n\nエラー詳細: ' + errorMessage,
+          'PDFレポートの生成に成功しました。\n\nブラウザで表示できない場合は、メールで送信してください。\n\n詳細: ' + errorMessage.substring(0, 100),
           [
             {
               text: 'OK',
