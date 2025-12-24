@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DateRangePicker } from '@/components/date-range-picker';
+import { PieChart } from '@/components/pie-chart';
 import { useHygieneStorage } from '@/hooks/use-hygiene-storage';
 import { TIMING_INFO, TimingType } from '@/lib/types';
 import { TimingColors, Colors } from '@/constants/theme';
@@ -222,54 +223,50 @@ export default function StatisticsScreen() {
           })}
         </View>
 
-        {/* アクション別統計 */}
-        <View style={styles.section}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            実施内容別
-          </ThemedText>
-
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.actionRow}>
-              <ThemedText type="default">手指消毒</ThemedText>
-              <ThemedText type="defaultSemiBold">
-                {stats.byAction.hand_sanitizer}回
-              </ThemedText>
-            </View>
-            <View
-              style={[
-                styles.actionRow,
-                { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 },
-              ]}
-            >
-              <ThemedText type="default">手洗い</ThemedText>
-              <ThemedText type="defaultSemiBold">
-                {stats.byAction.hand_wash}回
-              </ThemedText>
-            </View>
-            <View
-              style={[
-                styles.actionRow,
-                { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 },
-              ]}
-            >
-              <ThemedText type="default">実施なし</ThemedText>
-              <ThemedText type="defaultSemiBold">
-                {stats.byAction.no_action}回
-              </ThemedText>
-            </View>
-          </View>
-        </View>
-
-        {/* 実施率 */}
+        {/* 実施率 - 円グラフ */}
         {stats.total > 0 && (
           <View style={styles.section}>
             <ThemedText type="subtitle" style={styles.sectionTitle}>
-              実施率
+              実施内容別実施率
+            </ThemedText>
+
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <PieChart
+                data={[
+                  {
+                    label: '手指消毒',
+                    value: stats.byAction.hand_sanitizer,
+                    color: '#FF6B6B',
+                  },
+                  {
+                    label: '手洗い',
+                    value: stats.byAction.hand_wash,
+                    color: '#4ECDC4',
+                  },
+                  {
+                    label: '実施なし',
+                    value: stats.byAction.no_action,
+                    color: '#E8E8E8',
+                  },
+                ]}
+                size={240}
+                showLegend={true}
+                showPercentage={true}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* 実施率 - 数値表示 */}
+        {stats.total > 0 && (
+          <View style={styles.section}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              実施率（数値）
             </ThemedText>
 
             <View
@@ -397,12 +394,6 @@ const styles = StyleSheet.create({
   },
   statInfo: {
     flex: 1,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
   },
   rateRow: {
     flexDirection: 'row',
