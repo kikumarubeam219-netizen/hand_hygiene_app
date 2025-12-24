@@ -7,7 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useHygieneStorage } from '@/hooks/use-hygiene-storage';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { generatePDFViaBackend, downloadPDFBlob, getPDFFilename } from '@/lib/pdf-export';
+import { generateObservationFormHTML, downloadPDF, getPDFFilename } from '@/lib/pdf-export';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -71,8 +71,8 @@ export default function SettingsScreen() {
       const endDate = new Date();
       endDate.setHours(23, 59, 59, 999);
 
-      // バックエンドのPDF生成APIを呼び出す
-      const pdfBlob = await generatePDFViaBackend(
+      // 観察フォーム形式HTMLを生成
+      const html = generateObservationFormHTML(
         records,
         {
           facilityName,
@@ -90,9 +90,9 @@ export default function SettingsScreen() {
         endDate
       );
 
-      // PDFをダウンロード
+      // HTMLをダウンロード
       const filename = getPDFFilename(today);
-      await downloadPDFBlob(pdfBlob, filename);
+      await downloadPDF(html, filename);
 
       Alert.alert('成功', 'PDFを生成しました。ファイルを共有できます。');
     } catch (error) {
