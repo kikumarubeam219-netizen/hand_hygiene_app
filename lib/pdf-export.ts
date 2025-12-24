@@ -299,7 +299,7 @@ export function generateObservationFormHTML(
 /**
  * HTMLをダウンロード
  * Web環境ではブラウザのダウンロード機能を使用
- * React Native環境ではShare APIを使用
+ * React Native環境ではファイルシステムに保存してShare APIで共有
  */
 export async function downloadPDF(html: string, filename: string): Promise<void> {
   try {
@@ -335,14 +335,35 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
       console.log('[PDF] React Native環境での処理を開始');
       try {
-        // Share APIを使用
-        const SharingModule = await import('expo-sharing');
-        const Sharing = SharingModule.default || SharingModule;
+        // モジュールを動的インポート
+        const FileSystem = await import('expo-file-system');
+        const Sharing = await import('expo-sharing');
+
+        const fs = FileSystem.default || FileSystem;
+        const sharing = Sharing.default || Sharing;
 
         console.log('[PDF] モジュール読み込み成功');
 
+        // ドキュメントディレクトリを取得
+        const documentDir = (fs as any).documentDirectory;
+        if (!documentDir) {
+          throw new Error('ドキュメントディレクトリが取得できません');
+        }
+
+        console.log('[PDF] ドキュメントディレクトリ:', documentDir);
+
+        // ファイルパスを生成
+        const filePath = `${documentDir}${filename}.html`;
+        console.log('[PDF] ファイルパス:', filePath);
+
+        // HTMLをファイルに保存
+        await (fs as any).writeAsStringAsync(filePath, html, {
+          encoding: 'utf8',
+        });
+        console.log('[PDF] ファイル保存成功:', filePath);
+
         // Share APIが利用可能か確認
-        const isAvailable = await (Sharing as any).isAvailableAsync();
+        const isAvailable = await (sharing as any).isAvailableAsync();
         console.log('[PDF] Share API利用可能:', isAvailable);
 
         if (!isAvailable) {
@@ -353,15 +374,8 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
           return;
         }
 
-        // HTMLをメール本文として共有
-        const message = `
-手指衛生直接観察用フォーム
-
-${html}
-        `.trim();
-
-        // Share APIを使用してテキストを共有
-        await (Sharing as any).shareAsync(message, {
+        // Share APIでファイルを共有
+        await (sharing as any).shareAsync(filePath, {
           mimeType: 'text/html',
           dialogTitle: 'PDFレポートを共有',
         });
