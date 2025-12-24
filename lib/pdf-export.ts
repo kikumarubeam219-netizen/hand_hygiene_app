@@ -42,59 +42,26 @@ export function generateObservationFormHTML(
     (r) => r.timestamp >= startDate.getTime() && r.timestamp <= endDate.getTime()
   );
 
-  // 記録を日付別にグループ化
-  const recordsByDate: Record<string, HygieneRecord[]> = {};
-  filteredRecords.forEach((record) => {
-    const date = new Date(record.timestamp);
-    const dateKey = date.toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
+  // 記録を時系列でソート（古い順）
+  const sortedRecords = [...filteredRecords].sort((a, b) => a.timestamp - b.timestamp);
 
-    if (!recordsByDate[dateKey]) {
-      recordsByDate[dateKey] = [];
-    }
-    recordsByDate[dateKey].push(record);
-  });
-
-  // 全セッションのタイミング・アクション組み合わせを生成
-  const allCombinations: Array<{
-    sessionNum: number;
-    timing: number;
-    action: string;
+  // テーブル行データを生成（実施順序）
+  const tableRows: Array<{
+    itemNum: number;
     timingName: string;
     actionName: string;
-    isRecorded: boolean;
   }> = [];
 
-  let itemNum = 1;
-  let sessionNum = 0;
-  for (const dateKey of Object.keys(recordsByDate).sort().slice(0, 8)) {
-    sessionNum++;
-    const sessionRecords = recordsByDate[dateKey];
+  sortedRecords.forEach((record, index) => {
+    const timingInfo = TIMINGS[record.timing as keyof typeof TIMINGS];
+    const actionName = ACTIONS[record.action as keyof typeof ACTIONS];
 
-    // 5つのタイミングそれぞれに対して、3つのアクションを作成
-    for (let timing = 1; timing <= 5; timing++) {
-      const timingInfo = TIMINGS[timing as keyof typeof TIMINGS];
-      const timingRecords = sessionRecords.filter((r) => r.timing === timing);
-
-      // 3つのアクションを個別項目として追加
-      for (const actionKey of ['hand_sanitizer', 'hand_wash', 'no_action']) {
-        const actionName = ACTIONS[actionKey as keyof typeof ACTIONS];
-        const isRecorded = timingRecords.some((r) => r.action === actionKey);
-
-        allCombinations.push({
-          sessionNum,
-          timing,
-          action: actionKey,
-          timingName: timingInfo.name,
-          actionName,
-          isRecorded,
-        });
-      }
-    }
-  }
+    tableRows.push({
+      itemNum: index + 1,
+      timingName: timingInfo.name,
+      actionName: actionName,
+    });
+  });
 
   // HTMLを生成
   let html = `<!DOCTYPE html>
@@ -206,17 +173,6 @@ export function generateObservationFormHTML(
       color: #666;
     }
     
-    .checkbox-checked::before {
-      content: "☑ ";
-      color: #4CAF50;
-      font-weight: bold;
-    }
-    
-    .checkbox-unchecked::before {
-      content: "☐ ";
-      color: #999;
-    }
-    
     .footer {
       text-align: center;
       margin-top: 30px;
@@ -313,13 +269,13 @@ export function generateObservationFormHTML(
       <tbody>
 `;
 
-  // 全組み合わせをテーブルに追加
-  allCombinations.forEach((item, index) => {
+  // テーブル行を追加（実施順序）
+  tableRows.forEach((row) => {
     html += `
         <tr class="item-row">
-          <td class="item-number">${index + 1}</td>
-          <td><span class="timing-name">${item.timingName}</span></td>
-          <td><span class="action-name">${item.actionName}</span></td>
+          <td class="item-number">${row.itemNum}</td>
+          <td><span class="timing-name">${row.timingName}</span></td>
+          <td><span class="action-name">${row.actionName}</span></td>
         </tr>
 `;
   });
