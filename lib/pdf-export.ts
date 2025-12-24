@@ -188,11 +188,7 @@ export function generateObservationFormHTML(
     }
     
     .item-row {
-      background-color: #fff5f0;
-    }
-    
-    .item-row.checked {
-      background-color: #e8f5e9;
+      background-color: #ffffff;
     }
     
     .item-number {
@@ -319,11 +315,8 @@ export function generateObservationFormHTML(
 
   // 全組み合わせをテーブルに追加
   allCombinations.forEach((item, index) => {
-    const rowClass = item.isRecorded ? 'item-row checked' : 'item-row';
-    const checkboxClass = item.isRecorded ? 'checkbox-checked' : 'checkbox-unchecked';
-
     html += `
-        <tr class="${rowClass}">
+        <tr class="item-row">
           <td class="item-number">${index + 1}</td>
           <td><span class="timing-name">${item.timingName}</span></td>
           <td><span class="action-name">${item.actionName}</span></td>
