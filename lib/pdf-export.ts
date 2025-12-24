@@ -309,10 +309,9 @@ export function generateObservationFormHTML(
     <table class="observation-table">
       <thead>
         <tr>
-          <th style="width: 8%">No.</th>
-          <th style="width: 35%">タイミング</th>
-          <th style="width: 30%">実施内容</th>
-          <th style="width: 27%">チェック</th>
+          <th style="width: 10%">No.</th>
+          <th style="width: 40%">タイミング</th>
+          <th style="width: 50%">実施内容</th>
         </tr>
       </thead>
       <tbody>
@@ -328,7 +327,6 @@ export function generateObservationFormHTML(
           <td class="item-number">${index + 1}</td>
           <td><span class="timing-name">${item.timingName}</span></td>
           <td><span class="action-name">${item.actionName}</span></td>
-          <td><span class="${checkboxClass}"></span></td>
         </tr>
 `;
   });
