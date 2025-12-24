@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, View, TextInput, Pressable, Alert } from 'react-native';
+import { ScrollView, StyleSheet, View, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -7,7 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useHygieneStorage } from '@/hooks/use-hygiene-storage';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { generateObservationFormHTML } from '@/lib/pdf-export';
+import { generatePDFViaBackend, downloadPDFBlob, getPDFFilename } from '@/lib/pdf-export';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -23,6 +23,7 @@ export default function SettingsScreen() {
   const [observer, setObserver] = useState('');
   const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   useEffect(() => {
     setUserName(userInfo.userName || '');
@@ -62,13 +63,16 @@ export default function SettingsScreen() {
         return;
       }
 
+      setIsGeneratingPDF(true);
+
       const today = new Date();
       const startDate = new Date();
       startDate.setHours(0, 0, 0, 0);
       const endDate = new Date();
       endDate.setHours(23, 59, 59, 999);
 
-      const html = generateObservationFormHTML(
+      // バックエンドのPDF生成APIを呼び出す
+      const pdfBlob = await generatePDFViaBackend(
         records,
         {
           facilityName,
@@ -86,29 +90,17 @@ export default function SettingsScreen() {
         endDate
       );
 
-      // ブラウザ環境でのPDF表示
-      try {
-        const printWindow = window.open('', '', 'width=900,height=700');
-        if (printWindow) {
-          printWindow.document.write(html);
-          printWindow.document.close();
-          
-          // 少し遅延させてから印刷ダイアログを表示
-          setTimeout(() => {
-            printWindow.print();
-          }, 500);
-          
-          Alert.alert('成功', 'PDFを生成しました。ブラウザで表示されます。\n印刷ダイアログからPDFとして保存できます。');
-        } else {
-          Alert.alert('エラー', 'ブラウザウィンドウを開けませんでした。ポップアップをブロックしていないか確認してください。');
-        }
-      } catch (windowError) {
-        console.error('Window open error:', windowError);
-        Alert.alert('エラー', 'ブラウザウィンドウの作成に失敗しました。');
-      }
+      // PDFをダウンロード
+      const filename = getPDFFilename(today);
+      await downloadPDFBlob(pdfBlob, filename);
+
+      Alert.alert('成功', 'PDFを生成しました。ファイルを共有できます。');
     } catch (error) {
       console.error('Failed to generate PDF:', error);
-      Alert.alert('エラー', 'PDFの生成に失敗しました');
+      const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+      Alert.alert('エラー', 'PDFの生成に失敗しました: ' + errorMessage);
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -134,6 +126,21 @@ export default function SettingsScreen() {
       ]
     );
   };
+
+  // 統計情報を計算
+  const totalRecords = records.length;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+  const todayRecords = records.filter(
+    (r) => r.timestamp >= todayStart.getTime() && r.timestamp <= todayEnd.getTime()
+  ).length;
+
+  const lastRecord = records.length > 0 ? records[records.length - 1] : null;
+  const lastRecordTime = lastRecord
+    ? new Date(lastRecord.timestamp).toLocaleString('ja-JP')
+    : '記録なし';
 
   return (
     <ThemedView
@@ -319,7 +326,7 @@ export default function SettingsScreen() {
             ]}
           >
             <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>
-              保存
+              {isSaving ? '保存中...' : '保存'}
             </ThemedText>
           </Pressable>
         </View>
@@ -327,24 +334,30 @@ export default function SettingsScreen() {
         {/* PDF出力 */}
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
-            観察フォーム出力
+            PDF出力
           </ThemedText>
 
           <Pressable
             onPress={handleGeneratePDF}
+            disabled={isGeneratingPDF}
             style={[
               styles.button,
               styles.pdfButton,
               { backgroundColor: '#FF6B6B' },
+              isGeneratingPDF && styles.buttonDisabled,
             ]}
           >
-            <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>
-              本日のPDFを生成
-            </ThemedText>
+            {isGeneratingPDF ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>
+                本日のPDFを生成
+              </ThemedText>
+            )}
           </Pressable>
 
           <ThemedText type="default" style={styles.helpText}>
-            本日の記録を観察フォーム形式でPDFに変換します。ブラウザで表示されたら、印刷またはPDFとして保存できます。
+            本日の観察フォームをPDF形式で生成します。泉州感染防止ネットワーク公式フォーム形式で出力されます。
           </ThemedText>
         </View>
 
@@ -354,53 +367,33 @@ export default function SettingsScreen() {
             統計情報
           </ThemedText>
 
-          <View
-            style={[
-              styles.infoCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.infoRow}>
-              <ThemedText type="default">総記録数</ThemedText>
-              <ThemedText type="defaultSemiBold">{records.length}件</ThemedText>
-            </View>
-
-            <View
-              style={[
-                styles.infoRow,
-                { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 },
-              ]}
-            >
-              <ThemedText type="default">本日の記録数</ThemedText>
-              <ThemedText type="defaultSemiBold">
-                {
-                  records.filter((r) => {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const tomorrow = new Date(today);
-                    tomorrow.setDate(tomorrow.getDate() + 1);
-                    return r.timestamp >= today.getTime() && r.timestamp < tomorrow.getTime();
-                  }).length
-                }
-                件
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <ThemedText type="default" style={styles.statLabel}>
+                総記録数
+              </ThemedText>
+              <ThemedText type="title" style={styles.statValue}>
+                {totalRecords}
               </ThemedText>
             </View>
 
-            <View
-              style={[
-                styles.infoRow,
-                { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 },
-              ]}
-            >
-              <ThemedText type="default">最終記録日時</ThemedText>
-              <ThemedText type="defaultSemiBold">
-                {records.length > 0
-                  ? new Date(Math.max(...records.map((r) => r.timestamp))).toLocaleString(
-                      'ja-JP'
-                    )
-                  : 'なし'}
+            <View style={styles.statItem}>
+              <ThemedText type="default" style={styles.statLabel}>
+                本日の記録数
+              </ThemedText>
+              <ThemedText type="title" style={styles.statValue}>
+                {todayRecords}
               </ThemedText>
             </View>
+          </View>
+
+          <View style={styles.lastRecordContainer}>
+            <ThemedText type="defaultSemiBold" style={styles.lastRecordLabel}>
+              最終記録日時
+            </ThemedText>
+            <ThemedText type="default" style={styles.lastRecordValue}>
+              {lastRecordTime}
+            </ThemedText>
           </View>
         </View>
 
@@ -415,16 +408,16 @@ export default function SettingsScreen() {
             style={[
               styles.button,
               styles.resetButton,
-              { borderColor: colors.error },
+              { backgroundColor: '#FF3B30' },
             ]}
           >
-            <ThemedText type="defaultSemiBold" style={{ color: colors.error }}>
+            <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>
               すべてのデータをリセット
             </ThemedText>
           </Pressable>
 
-          <ThemedText type="default" style={styles.warningText}>
-            この操作は取り消せません。すべての記録データが削除されます。
+          <ThemedText type="default" style={[styles.helpText, { color: '#FF3B30' }]}>
+            ⚠️ この操作は取り消せません。すべての記録データが削除されます。
           </ThemedText>
         </View>
 
@@ -434,38 +427,16 @@ export default function SettingsScreen() {
             アプリ情報
           </ThemedText>
 
-          <View
-            style={[
-              styles.infoCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.infoRow}>
-              <ThemedText type="default">アプリ名</ThemedText>
-              <ThemedText type="defaultSemiBold">Hand Hygiene Tracker</ThemedText>
-            </View>
-
-            <View
-              style={[
-                styles.infoRow,
-                { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 },
-              ]}
-            >
-              <ThemedText type="default">バージョン</ThemedText>
-              <ThemedText type="defaultSemiBold">1.0.0</ThemedText>
-            </View>
-
-            <View
-              style={[
-                styles.infoRow,
-                { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 },
-              ]}
-            >
-              <ThemedText type="default">参考資料</ThemedText>
-              <ThemedText type="defaultSemiBold" style={{ fontSize: 12 }}>
-                WHO Hand Hygiene
-              </ThemedText>
-            </View>
+          <View style={styles.infoContainer}>
+            <ThemedText type="default" style={styles.infoText}>
+              手指衛生5つのタイミング記録アプリ
+            </ThemedText>
+            <ThemedText type="default" style={[styles.infoText, { fontSize: 12 }]}>
+              バージョン 1.0.0
+            </ThemedText>
+            <ThemedText type="default" style={[styles.infoText, { fontSize: 12 }]}>
+              WHO観察フォーム対応
+            </ThemedText>
           </View>
         </View>
       </ScrollView>
@@ -478,7 +449,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   content: {
     flex: 1,
@@ -487,15 +458,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    marginBottom: 12,
     fontSize: 18,
+    marginBottom: 16,
   },
   formGroup: {
     marginBottom: 12,
   },
   label: {
-    marginBottom: 6,
     fontSize: 14,
+    marginBottom: 8,
   },
   input: {
     borderWidth: 1,
@@ -506,45 +477,69 @@ const styles = StyleSheet.create({
   },
   button: {
     paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     minHeight: 44,
-    marginTop: 8,
   },
   saveButton: {
-    backgroundColor: '#4ECDC4',
+    marginTop: 8,
   },
   pdfButton: {
-    backgroundColor: '#FF6B6B',
+    marginBottom: 8,
   },
   resetButton: {
-    borderWidth: 1,
+    marginTop: 8,
   },
   buttonDisabled: {
-    opacity: 0.5,
-  },
-  warningText: {
-    marginTop: 8,
-    fontSize: 12,
     opacity: 0.6,
-    fontStyle: 'italic',
   },
   helpText: {
-    marginTop: 8,
     fontSize: 12,
-    opacity: 0.7,
-    lineHeight: 18,
+    marginTop: 8,
+    color: '#666',
   },
-  infoCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-  },
-  infoRow: {
+  statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    justifyContent: 'space-around',
+    marginBottom: 16,
     paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 24,
+  },
+  lastRecordContainer: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  lastRecordLabel: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  lastRecordValue: {
+    fontSize: 12,
+  },
+  infoContainer: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  infoText: {
+    fontSize: 14,
+    marginBottom: 4,
   },
 });
