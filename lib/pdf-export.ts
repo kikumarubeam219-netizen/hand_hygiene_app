@@ -1,4 +1,5 @@
-import { HygieneRecord, TIMING_INFO, ACTION_LABELS, TimingType } from './types';
+import { Platform, Alert } from 'react-native';
+import { HygieneRecord, TIMING_INFO, TimingType } from './types';
 
 interface FacilityInfo {
   facilityName: string;
@@ -389,23 +390,66 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * HTMLをPDFに変換してダウンロード
- * React Native環境とWeb環境の両方に対応
+ * HTMLをダウンロード
+ * Web環境ではブラウザのダウンロード機能を使用
+ * React Native環境ではShare APIを使用
  */
 export async function downloadPDF(html: string, filename: string): Promise<void> {
   try {
     // Web環境での処理
-    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      // 新しいウィンドウを開く
-      const printWindow = window.open('', '', 'width=800,height=600');
-      if (printWindow) {
-        printWindow.document.write(html);
-        printWindow.document.close();
-        
-        // 少し遅延させてから印刷ダイアログを表示
-        setTimeout(() => {
-          printWindow.print();
-        }, 250);
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+      try {
+        // ブラウザのダウンロード機能を使用
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${filename}.html`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        return;
+      } catch (webError) {
+        console.error('Web download error:', webError);
+        Alert.alert('エラー', 'PDFのダウンロードに失敗しました');
+        throw webError;
+      }
+    }
+
+    // React Native環境での処理
+    if (Platform.OS !== 'web') {
+      try {
+        // 動的インポート
+        const FileSystem = await import('expo-file-system');
+        const Sharing = await import('expo-sharing');
+
+        // HTMLファイルを一時ディレクトリに保存
+        const cacheDir = (FileSystem.default as any).cacheDirectory || (FileSystem as any).cacheDirectory;
+        const fileUri = `${cacheDir}${filename}.html`;
+
+        const writeAsync = (FileSystem.default as any).writeAsStringAsync || (FileSystem as any).writeAsStringAsync;
+        await writeAsync(fileUri, html, {
+          encoding: 'utf8',
+        });
+
+        // Share APIを使用してファイルを共有
+        if (await Sharing.default.isAvailableAsync()) {
+          await Sharing.default.shareAsync(fileUri, {
+            mimeType: 'text/html',
+            dialogTitle: 'PDFを共有',
+          });
+        } else {
+          Alert.alert(
+            '共有できません',
+            'このデバイスでは共有機能が利用できません。ファイルは以下に保存されました:\n' + fileUri
+          );
+        }
+      } catch (nativeError) {
+        console.error('React Native error:', nativeError);
+        Alert.alert('エラー', 'PDFの生成に失敗しました: ' + (nativeError instanceof Error ? nativeError.message : '不明なエラー'));
+        throw nativeError;
       }
     }
   } catch (error) {
@@ -416,5 +460,5 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
 
 export function getPDFFilename(startDate: Date): string {
   const dateStr = startDate.toISOString().split('T')[0];
-  return `hygiene_observation_form_${dateStr}.pdf`;
+  return `hygiene_observation_form_${dateStr}`;
 }
