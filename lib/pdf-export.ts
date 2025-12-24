@@ -1,4 +1,4 @@
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Share, Clipboard } from 'react-native';
 import { HygieneRecord, TIMING_INFO, TimingType } from './types';
 
 interface FacilityInfo {
@@ -335,33 +335,34 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
       console.log('[PDF] React Native環境での処理を開始');
       try {
-        // モジュールを動的インポート
-        const WebBrowser = await import('expo-web-browser');
-        const browser = WebBrowser.default || WebBrowser;
-
-        console.log('[PDF] モジュール読み込み成功');
-
-        // HTMLをBase64エンコード
-        // React Native環境ではBufferが使用できないため、btoa関数を使用
-        let base64Html: string;
-        if (typeof btoa !== 'undefined') {
-          // ブラウザ環境またはReact Native環境
-          base64Html = btoa(unescape(encodeURIComponent(html)));
-        } else if (typeof Buffer !== 'undefined') {
-          // Node.js環境
-          base64Html = Buffer.from(html).toString('base64');
+        console.log('[PDF] Share APIを使用してPDFレポートを共有');
+        
+        // HTMLをクリップボードにコピー
+        await Clipboard.setString(html);
+        console.log('[PDF] HTMLをクリップボードにコピー');
+        
+        // Share APIを使用してメッセージを共有
+        const result = await Share.share({
+          message: 'PDFレポートを生成しました。クリップボードにコピーされているデータをメールで送信して、ブラウザで開いてPDFに変換してください。',
+          title: 'PDFレポート',
+        });
+        
+        if (result.action === Share.dismissedAction) {
+          console.log('[PDF] ユーザーが共有をキャンセル');
         } else {
-          throw new Error('Base64エンコードが利用できません');
+          console.log('[PDF] 共有成功:', result.action);
         }
-        const dataUrl = `data:text/html;base64,${base64Html}`;
-
-        console.log('[PDF] データURL生成成功:', dataUrl.substring(0, 50) + '...');
-
-        // WebBrowserで表示
-        console.log('[PDF] WebBrowserで表示を試行');
-        await (browser as any).openBrowserAsync(dataUrl);
-
-        console.log('[PDF] WebBrowser表示成功');
+        
+        Alert.alert(
+          'PDFレポート生成完了',
+          'PDFレポートの生成に成功しました。\n\nHTMLはクリップボードにコピーされています。\nメールアプリで貼り付けるか、ブラウザで開いてPDFに変換してください。',
+          [
+            {
+              text: 'OK',
+              onPress: () => console.log('[PDF] ユーザーが確認'),
+            },
+          ]
+        );
       } catch (nativeError) {
         console.error('[PDF] React Native error:', nativeError);
         console.error('[PDF] エラースタック:', nativeError instanceof Error ? nativeError.stack : '不明');
@@ -373,7 +374,7 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
 
         Alert.alert(
           'PDFレポート生成完了',
-          'PDFレポートの生成に成功しました。\n\nブラウザで表示できない場合は、メールで送信してください。\n\n詳細: ' + errorMessage.substring(0, 100),
+          'PDFレポートの生成に成功しました。\n\nクリップボードにコピーされているデータをメールで送信して、ブラウザで開いてPDFに変換してください。\n\n詳細: ' + errorMessage.substring(0, 100),
           [
             {
               text: 'OK',
