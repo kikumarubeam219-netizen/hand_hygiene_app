@@ -1,15 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { ScrollView, StyleSheet, View, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DateRangePicker } from '@/components/date-range-picker';
 import { useHygieneStorage } from '@/hooks/use-hygiene-storage';
 import { TIMING_INFO, TimingType } from '@/lib/types';
 import { TimingColors, Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { generateStatisticsCSV, downloadCSV, getCSVFilename } from '@/lib/csv-export';
 
-type PeriodType = 'day' | 'week' | 'month';
+type PeriodType = 'day' | 'week' | 'month' | 'custom';
 
 export default function StatisticsScreen() {
   const insets = useSafeAreaInsets();
@@ -18,9 +20,16 @@ export default function StatisticsScreen() {
 
   const { records, getStatistics } = useHygieneStorage();
   const [period, setPeriod] = useState<PeriodType>('day');
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState(new Date());
+  const [customEndDate, setCustomEndDate] = useState(new Date());
 
   // 期間を計算
   const getDateRange = (periodType: PeriodType) => {
+    if (periodType === 'custom') {
+      return { startDate: customStartDate, endDate: customEndDate };
+    }
+
     const endDate = new Date();
     endDate.setHours(23, 59, 59, 999);
 
@@ -37,8 +46,27 @@ export default function StatisticsScreen() {
     return { startDate, endDate };
   };
 
+  const handleCustomDateRange = (start: Date, end: Date) => {
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+    setPeriod('custom');
+    setDatePickerVisible(false);
+  };
+
+  const handleExportCSV = () => {
+    try {
+      const csv = generateStatisticsCSV(records, startDate, endDate);
+      const filename = getCSVFilename('statistics', startDate);
+      downloadCSV(csv, filename);
+      Alert.alert('成功', 'CSVファイルをダウンロードしました');
+    } catch (error) {
+      console.error('Failed to export CSV:', error);
+      Alert.alert('エラー', 'CSVのエクスポートに失敗しました');
+    }
+  };
+
   const { startDate, endDate } = getDateRange(period);
-  const stats = useMemo(() => getStatistics(startDate, endDate), [period, records]);
+  const stats = useMemo(() => getStatistics(startDate, endDate), [period, records, customStartDate, customEndDate]);
 
   // 期間ラベルを取得
   const getPeriodLabel = () => {
@@ -50,8 +78,10 @@ export default function StatisticsScreen() {
       const end = new Date(start);
       end.setDate(end.getDate() + 6);
       return `${start.toLocaleDateString('ja-JP')} ～ ${end.toLocaleDateString('ja-JP')}`;
-    } else {
+    } else if (period === 'month') {
       return new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' });
+    } else {
+      return `${customStartDate.toLocaleDateString('ja-JP')} ～ ${customEndDate.toLocaleDateString('ja-JP')}`;
     }
   };
 
@@ -99,13 +129,47 @@ export default function StatisticsScreen() {
             </ThemedText>
           </Pressable>
         ))}
+        <Pressable
+          onPress={() => setDatePickerVisible(true)}
+          style={[
+            styles.periodButton,
+            period === 'custom' && [
+              styles.periodButtonActive,
+              { backgroundColor: colors.tint },
+            ],
+            { borderColor: colors.border },
+          ]}
+        >
+          <ThemedText
+            type="defaultSemiBold"
+            style={{
+              color: period === 'custom' ? '#fff' : colors.text,
+              fontSize: 11,
+            }}
+          >
+            期間指定
+          </ThemedText>
+        </Pressable>
       </View>
 
-      {/* 期間表示 */}
+      {/* 期間表示とCSV出力 */}
       <View style={styles.periodDisplay}>
-        <ThemedText type="default" style={{ opacity: 0.7 }}>
-          {getPeriodLabel()}
-        </ThemedText>
+        <View style={{ flex: 1 }}>
+          <ThemedText type="default" style={{ opacity: 0.7 }}>
+            {getPeriodLabel()}
+          </ThemedText>
+        </View>
+        <Pressable
+          onPress={handleExportCSV}
+          style={[
+            styles.exportButton,
+            { backgroundColor: colors.tint },
+          ]}
+        >
+          <ThemedText type="defaultSemiBold" style={{ color: '#fff', fontSize: 12 }}>
+            CSV出力
+          </ThemedText>
+        </Pressable>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -252,6 +316,15 @@ export default function StatisticsScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* 日付範囲ピッカー */}
+      <DateRangePicker
+        visible={datePickerVisible}
+        startDate={customStartDate}
+        endDate={customEndDate}
+        onConfirm={handleCustomDateRange}
+        onCancel={() => setDatePickerVisible(false)}
+      />
     </ThemedView>
   );
 }
@@ -265,11 +338,13 @@ const styles = StyleSheet.create({
   },
   periodSelector: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     marginBottom: 16,
+    flexWrap: 'wrap',
   },
   periodButton: {
     flex: 1,
+    minWidth: '20%',
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
@@ -280,8 +355,16 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   periodDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     marginBottom: 16,
     paddingHorizontal: 12,
+  },
+  exportButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
   },
   content: {
     flex: 1,

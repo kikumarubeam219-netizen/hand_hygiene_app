@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { ScrollView, StyleSheet, View, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -59,11 +59,25 @@ export default function ChecklistScreen() {
   }, [filteredRecords]);
 
   const handleDelete = async (id: string) => {
-    try {
-      await deleteRecord(id);
-    } catch (error) {
-      console.error('Failed to delete record:', error);
-    }
+    Alert.alert(
+      '記録を削除',
+      'この記録を削除してもよろしいですか?',
+      [
+        { text: 'キャンセル', onPress: () => {}, style: 'cancel' },
+        {
+          text: '削除',
+          onPress: async () => {
+            try {
+              await deleteRecord(id);
+            } catch (error) {
+              console.error('Failed to delete record:', error);
+              Alert.alert('エラー', '記録の削除に失敗しました');
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
   };
 
   return (
