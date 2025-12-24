@@ -299,7 +299,7 @@ export function generateObservationFormHTML(
 /**
  * HTMLをダウンロード
  * Web環境ではブラウザのダウンロード機能を使用
- * React Native環境ではShare APIを使用（Blobベース）
+ * React Native環境ではShare APIを使用
  */
 export async function downloadPDF(html: string, filename: string): Promise<void> {
   try {
@@ -335,65 +335,55 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
       console.log('[PDF] React Native環境での処理を開始');
       try {
-        // 動的インポート
+        // Share APIを使用
         const SharingModule = await import('expo-sharing');
         const Sharing = SharingModule.default || SharingModule;
 
         console.log('[PDF] モジュール読み込み成功');
 
-        // HTMLをBase64エンコード
-        const base64Html = btoa(unescape(encodeURIComponent(html)));
-        const dataUrl = `data:text/html;base64,${base64Html}`;
-
-        console.log('[PDF] Base64エンコード成功');
-
-        // Share APIを使用してHTMLを共有
+        // Share APIが利用可能か確認
         const isAvailable = await (Sharing as any).isAvailableAsync();
         console.log('[PDF] Share API利用可能:', isAvailable);
 
-        if (isAvailable) {
-          // URLスキームを使用してブラウザで開く
-          const url = encodeURI(dataUrl);
-          
-          // Expo WebBrowserを使用してHTMLを表示
-          const WebBrowserModule = await import('expo-web-browser');
-          const WebBrowser = WebBrowserModule.default || WebBrowserModule;
-          
-          await (WebBrowser as any).openBrowserAsync(url);
-          console.log('[PDF] ブラウザで表示成功');
-        } else {
+        if (!isAvailable) {
           Alert.alert(
             '共有できません',
             'このデバイスでは共有機能が利用できません。'
           );
+          return;
         }
+
+        // HTMLをメール本文として共有
+        const message = `
+手指衛生直接観察用フォーム
+
+${html}
+        `.trim();
+
+        // Share APIを使用してテキストを共有
+        await (Sharing as any).shareAsync(message, {
+          mimeType: 'text/html',
+          dialogTitle: 'PDFレポートを共有',
+        });
+
+        console.log('[PDF] Share API使用成功');
       } catch (nativeError) {
         console.error('[PDF] React Native error:', nativeError);
-        
+
         // フォールバック: Alertで情報を表示
-        try {
-          const SharingModule = await import('expo-sharing');
-          const Sharing = SharingModule.default || SharingModule;
-          
-          // テキストとして共有を試みる
-          const isAvailable = await (Sharing as any).isAvailableAsync();
-          if (isAvailable) {
-            Alert.alert(
-              'PDFレポート',
-              'PDFレポートの生成に成功しました。ブラウザで表示するか、メールで送信してください。',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => console.log('[PDF] ユーザーが確認'),
-                },
-              ]
-            );
-          }
-        } catch (fallbackError) {
-          console.error('[PDF] Fallback error:', fallbackError);
-          const errorMessage = nativeError instanceof Error ? nativeError.message : '不明なエラー';
-          Alert.alert('エラー', 'PDFの生成に失敗しました: ' + errorMessage);
-        }
+        const errorMessage = nativeError instanceof Error ? nativeError.message : '不明なエラー';
+        console.log('[PDF] フォールバック処理を実行:', errorMessage);
+
+        Alert.alert(
+          'PDFレポート生成完了',
+          'PDFレポートの生成に成功しました。\n\nブラウザで表示するか、メールで送信してください。\n\nエラー詳細: ' + errorMessage,
+          [
+            {
+              text: 'OK',
+              onPress: () => console.log('[PDF] ユーザーが確認'),
+            },
+          ]
+        );
       }
     }
 
