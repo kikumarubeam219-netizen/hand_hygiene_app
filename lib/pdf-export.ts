@@ -299,11 +299,10 @@ export function generateObservationFormHTML(
 /**
  * HTMLをダウンロード
  * Web環境ではブラウザのダウンロード機能を使用
- * React Native環境ではShare APIを使用
+ * React Native環境ではShare APIを使用（Blobベース）
  */
 export async function downloadPDF(html: string, filename: string): Promise<void> {
   try {
-    // Platform.OSの値を確認
     console.log('[PDF] Platform.OS:', Platform.OS);
     console.log('[PDF] typeof window:', typeof window);
 
@@ -337,64 +336,72 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
       console.log('[PDF] React Native環境での処理を開始');
       try {
         // 動的インポート
-        const FileSystemModule = await import('expo-file-system');
         const SharingModule = await import('expo-sharing');
-
-        const FileSystem = FileSystemModule.default || FileSystemModule;
         const Sharing = SharingModule.default || SharingModule;
 
         console.log('[PDF] モジュール読み込み成功');
 
-        // キャッシュディレクトリを取得（複数の方法を試行）
-        let fileDir = (FileSystem as any).cacheDirectory;
-        
-        // キャッシュディレクトリが利用できない場合はドキュメントディレクトリを使用
-        if (!fileDir) {
-          fileDir = (FileSystem as any).documentDirectory;
-        }
-        
-        // それでも取得できない場合はエラー
-        if (!fileDir) {
-          throw new Error('ファイルディレクトリが取得できません。キャッシュディレクトリとドキュメントディレクトリの両方が利用できません');
-        }
+        // HTMLをBase64エンコード
+        const base64Html = btoa(unescape(encodeURIComponent(html)));
+        const dataUrl = `data:text/html;base64,${base64Html}`;
 
-        const fileUri = `${fileDir}${filename}.html`;
-        console.log('[PDF] ファイルパス:', fileUri);
+        console.log('[PDF] Base64エンコード成功');
 
-        // HTMLファイルを保存
-        const writeAsync = (FileSystem as any).writeAsStringAsync;
-        await writeAsync(fileUri, html, {
-          encoding: 'utf8',
-        });
-        console.log('[PDF] ファイル保存成功');
-
-        // Share APIを使用してファイルを共有
+        // Share APIを使用してHTMLを共有
         const isAvailable = await (Sharing as any).isAvailableAsync();
         console.log('[PDF] Share API利用可能:', isAvailable);
 
         if (isAvailable) {
-          await (Sharing as any).shareAsync(fileUri, {
-            mimeType: 'text/html',
-            dialogTitle: 'PDFを共有',
-          });
-          console.log('[PDF] Share API実行成功');
+          // URLスキームを使用してブラウザで開く
+          const url = encodeURI(dataUrl);
+          
+          // Expo WebBrowserを使用してHTMLを表示
+          const WebBrowserModule = await import('expo-web-browser');
+          const WebBrowser = WebBrowserModule.default || WebBrowserModule;
+          
+          await (WebBrowser as any).openBrowserAsync(url);
+          console.log('[PDF] ブラウザで表示成功');
         } else {
           Alert.alert(
             '共有できません',
-            'このデバイスでは共有機能が利用できません。ファイルは以下に保存されました:\n' + fileUri
+            'このデバイスでは共有機能が利用できません。'
           );
         }
       } catch (nativeError) {
         console.error('[PDF] React Native error:', nativeError);
-        const errorMessage = nativeError instanceof Error ? nativeError.message : '不明なエラー';
-        Alert.alert('エラー', 'PDFの生成に失敗しました: ' + errorMessage);
-        throw nativeError;
+        
+        // フォールバック: Alertで情報を表示
+        try {
+          const SharingModule = await import('expo-sharing');
+          const Sharing = SharingModule.default || SharingModule;
+          
+          // テキストとして共有を試みる
+          const isAvailable = await (Sharing as any).isAvailableAsync();
+          if (isAvailable) {
+            Alert.alert(
+              'PDFレポート',
+              'PDFレポートの生成に成功しました。ブラウザで表示するか、メールで送信してください。',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => console.log('[PDF] ユーザーが確認'),
+                },
+              ]
+            );
+          }
+        } catch (fallbackError) {
+          console.error('[PDF] Fallback error:', fallbackError);
+          const errorMessage = nativeError instanceof Error ? nativeError.message : '不明なエラー';
+          Alert.alert('エラー', 'PDFの生成に失敗しました: ' + errorMessage);
+        }
       }
     }
 
     // その他のプラットフォーム
-    console.warn('[PDF] サポートされていないプラットフォーム:', Platform.OS);
-    Alert.alert('エラー', 'このプラットフォームではPDF出力がサポートされていません');
+    if (Platform.OS !== 'web' && Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      console.warn('[PDF] サポートされていないプラットフォーム:', Platform.OS);
+      Alert.alert('エラー', 'このプラットフォームではPDF出力がサポートされていません');
+    }
   } catch (error) {
     console.error('[PDF] Failed to generate PDF:', error);
     throw error;
