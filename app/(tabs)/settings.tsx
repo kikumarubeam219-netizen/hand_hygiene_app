@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useHygieneStorage } from '@/hooks/use-hygiene-storage';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { generateObservationFormHTML } from '@/lib/pdf-export';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -16,11 +17,21 @@ export default function SettingsScreen() {
   const { userInfo, saveUserInfo, resetAllData, records } = useHygieneStorage();
   const [userName, setUserName] = useState('');
   const [facilityName, setFacilityName] = useState('');
+  const [department, setDepartment] = useState('');
+  const [ward, setWard] = useState('');
+  const [section, setSection] = useState('');
+  const [observer, setObserver] = useState('');
+  const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setUserName(userInfo.userName || '');
     setFacilityName(userInfo.facilityName || '');
+    setDepartment(userInfo.department || '');
+    setWard(userInfo.ward || '');
+    setSection(userInfo.section || '');
+    setObserver(userInfo.observer || '');
+    setAddress(userInfo.address || '');
   }, [userInfo]);
 
   const handleSave = async () => {
@@ -29,12 +40,63 @@ export default function SettingsScreen() {
       await saveUserInfo({
         userName: userName || undefined,
         facilityName: facilityName || undefined,
+        department: department || undefined,
+        ward: ward || undefined,
+        section: section || undefined,
+        observer: observer || undefined,
+        address: address || undefined,
       });
+      Alert.alert('完了', '設定を保存しました');
     } catch (error) {
       console.error('Failed to save user info:', error);
       Alert.alert('エラー', '設定の保存に失敗しました');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleGeneratePDF = async () => {
+    try {
+      if (!facilityName) {
+        Alert.alert('エラー', '施設名を入力してください');
+        return;
+      }
+
+      const today = new Date();
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date();
+      endDate.setHours(23, 59, 59, 999);
+
+      const html = generateObservationFormHTML(
+        records,
+        {
+          facilityName,
+          department,
+          ward,
+          section,
+          periodNumber: '',
+          date: today.toLocaleDateString('ja-JP'),
+          sessionNumber: '',
+          observer,
+          pageNumber: '1',
+          address,
+        },
+        startDate,
+        endDate
+      );
+
+      // ブラウザでHTMLを表示してPDF印刷できるようにする
+      if (typeof window !== 'undefined') {
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      }
+
+      Alert.alert('成功', 'PDFを生成しました。ブラウザで表示されます。');
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      Alert.alert('エラー', 'PDFの生成に失敗しました');
     }
   };
 
@@ -81,10 +143,10 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* ユーザー情報 */}
+        {/* 基本情報 */}
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
-            ユーザー情報
+            基本情報
           </ThemedText>
 
           <View style={styles.formGroup}>
@@ -126,6 +188,113 @@ export default function SettingsScreen() {
               onChangeText={setFacilityName}
             />
           </View>
+        </View>
+
+        {/* 観察フォーム情報 */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            観察フォーム情報
+          </ThemedText>
+
+          <View style={styles.formGroup}>
+            <ThemedText type="defaultSemiBold" style={styles.label}>
+              部局
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                },
+              ]}
+              placeholder="部局を入力"
+              placeholderTextColor={colors.text + '80'}
+              value={department}
+              onChangeText={setDepartment}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <ThemedText type="defaultSemiBold" style={styles.label}>
+              病棟
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                },
+              ]}
+              placeholder="病棟を入力"
+              placeholderTextColor={colors.text + '80'}
+              value={ward}
+              onChangeText={setWard}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <ThemedText type="defaultSemiBold" style={styles.label}>
+              科
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                },
+              ]}
+              placeholder="科を入力"
+              placeholderTextColor={colors.text + '80'}
+              value={section}
+              onChangeText={setSection}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <ThemedText type="defaultSemiBold" style={styles.label}>
+              観察者
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                },
+              ]}
+              placeholder="観察者名を入力"
+              placeholderTextColor={colors.text + '80'}
+              value={observer}
+              onChangeText={setObserver}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <ThemedText type="defaultSemiBold" style={styles.label}>
+              住所
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                },
+              ]}
+              placeholder="住所を入力"
+              placeholderTextColor={colors.text + '80'}
+              value={address}
+              onChangeText={setAddress}
+            />
+          </View>
 
           <Pressable
             onPress={handleSave}
@@ -141,6 +310,30 @@ export default function SettingsScreen() {
               保存
             </ThemedText>
           </Pressable>
+        </View>
+
+        {/* PDF出力 */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            観察フォーム出力
+          </ThemedText>
+
+          <Pressable
+            onPress={handleGeneratePDF}
+            style={[
+              styles.button,
+              styles.pdfButton,
+              { backgroundColor: '#FF6B6B' },
+            ]}
+          >
+            <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>
+              本日のPDFを生成
+            </ThemedText>
+          </Pressable>
+
+          <ThemedText type="default" style={styles.helpText}>
+            本日の記録を観察フォーム形式でPDFに変換します。ブラウザで表示されたら、印刷またはPDFとして保存できます。
+          </ThemedText>
         </View>
 
         {/* 統計情報 */}
@@ -310,6 +503,9 @@ const styles = StyleSheet.create({
   saveButton: {
     backgroundColor: '#4ECDC4',
   },
+  pdfButton: {
+    backgroundColor: '#FF6B6B',
+  },
   resetButton: {
     borderWidth: 1,
   },
@@ -321,6 +517,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.6,
     fontStyle: 'italic',
+  },
+  helpText: {
+    marginTop: 8,
+    fontSize: 12,
+    opacity: 0.7,
+    lineHeight: 18,
   },
   infoCard: {
     borderRadius: 12,

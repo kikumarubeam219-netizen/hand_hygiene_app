@@ -4,6 +4,16 @@ export type TimingType = 1 | 2 | 3 | 4 | 5;
 
 export type ActionType = 'hand_sanitizer' | 'hand_wash' | 'no_action';
 
+export interface UserInfo {
+  userName?: string;
+  facilityName?: string;
+  department?: string;
+  ward?: string;
+  section?: string;
+  observer?: string;
+  address?: string;
+}
+
 export interface HygieneRecord {
   id: string;
   timing: TimingType;

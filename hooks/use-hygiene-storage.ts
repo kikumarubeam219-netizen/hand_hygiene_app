@@ -8,6 +8,11 @@ const USER_INFO_KEY = 'user_info';
 export interface UserInfo {
   userName?: string;
   facilityName?: string;
+  department?: string;
+  ward?: string;
+  section?: string;
+  observer?: string;
+  address?: string;
 }
 
 export function useHygieneStorage() {
