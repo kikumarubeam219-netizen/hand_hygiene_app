@@ -1,5 +1,7 @@
-import { Platform, Alert, Share, Clipboard } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import { HygieneRecord, TIMING_INFO, TimingType } from './types';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 interface FacilityInfo {
   facilityName: string;
@@ -276,7 +278,6 @@ export function generateObservationFormHTML(
 export async function downloadPDF(html: string, filename: string): Promise<void> {
   try {
     console.log('[PDF] Platform.OS:', Platform.OS);
-    console.log('[PDF] typeof window:', typeof window);
 
     // Web環境での処理（ブラウザ）
     if (Platform.OS === 'web') {
@@ -288,13 +289,13 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
           if (newWindow) {
             newWindow.document.write(html);
             newWindow.document.close();
-            
+
             // 少し遅延してから印刷ダイアログを表示
             setTimeout(() => {
               newWindow.print();
               console.log('[PDF] 印刷ダイアログを表示');
             }, 250);
-            
+
             console.log('[PDF] Web環境でのPDF生成成功');
           } else {
             throw new Error('ポップアップウィンドウを開くことができません');
@@ -312,53 +313,26 @@ export async function downloadPDF(html: string, filename: string): Promise<void>
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
       console.log('[PDF] React Native環境での処理を開始');
       try {
-        console.log('[PDF] Share APIを使用してPDFレポートを共有');
-        
-        // HTMLをクリップボードにコピー
-        await Clipboard.setString(html);
-        console.log('[PDF] HTMLをクリップボードにコピー');
-        
-        // Share APIを使用してメッセージを共有
-        const result = await Share.share({
-          message: 'PDFレポートを生成しました。クリップボードにコピーされているデータをメールで送信して、ブラウザで開いてPDFに変換してください。',
-          title: 'PDFレポート',
-        });
-        
-        if (result.action === Share.dismissedAction) {
-          console.log('[PDF] ユーザーが共有をキャンセル');
+        // HTMLからPDFを生成
+        console.log('[PDF] expo-printでPDFを生成中...');
+        const { uri } = await Print.printToFileAsync({ html });
+        console.log('[PDF] PDFファイル生成完了:', uri);
+
+        // PDFを共有
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'PDFを共有',
+            UTI: 'com.adobe.pdf',
+          });
+          console.log('[PDF] PDF共有ダイアログを表示');
         } else {
-          console.log('[PDF] 共有成功:', result.action);
+          Alert.alert('成功', `PDFが生成されました。\n保存先: ${uri}`);
         }
-        
-        Alert.alert(
-          'PDFレポート生成完了',
-          'PDFレポートの生成に成功しました。\n\nHTMLはクリップボードにコピーされています。\nメールアプリで貼り付けるか、ブラウザで開いてPDFに変換してください。',
-          [
-            {
-              text: 'OK',
-              onPress: () => console.log('[PDF] ユーザーが確認'),
-            },
-          ]
-        );
       } catch (nativeError) {
         console.error('[PDF] React Native error:', nativeError);
-        console.error('[PDF] エラースタック:', nativeError instanceof Error ? nativeError.stack : '不明');
-
-        // フォールバック: Alertで情報を表示
         const errorMessage = nativeError instanceof Error ? nativeError.message : '不明なエラー';
-        console.log('[PDF] フォールバック処理を実行:', errorMessage);
-        console.log('[PDF] HTMLの長さ:', html.length);
-
-        Alert.alert(
-          'PDFレポート生成完了',
-          'PDFレポートの生成に成功しました。\n\nクリップボードにコピーされているデータをメールで送信して、ブラウザで開いてPDFに変換してください。\n\n詳細: ' + errorMessage.substring(0, 100),
-          [
-            {
-              text: 'OK',
-              onPress: () => console.log('[PDF] ユーザーが確認'),
-            },
-          ]
-        );
+        Alert.alert('エラー', `PDFの生成に失敗しました。\n${errorMessage}`);
       }
     }
 

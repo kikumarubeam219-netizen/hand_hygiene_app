@@ -1,4 +1,5 @@
 import { HygieneRecord, TIMING_INFO, ACTION_LABELS, TimingType } from './types';
+import { Platform, Share, Alert, Clipboard } from 'react-native';
 
 export function generateCSV(records: HygieneRecord[], startDate: Date, endDate: Date): string {
   // ヘッダー
@@ -80,6 +81,9 @@ export function generateStatisticsCSV(
   stats.byAction.no_action = filteredRecords.filter((r) => r.action === 'no_action').length;
 
   // CSV形式に変換
+  const completedCount = stats.byAction.hand_sanitizer + stats.byAction.hand_wash;
+  const completionRate = stats.total > 0 ? Math.round((completedCount / stats.total) * 100) : 0;
+
   const lines = [
     '手指衛生統計レポート',
     '',
@@ -87,6 +91,7 @@ export function generateStatisticsCSV(
     '',
     '【合計統計】',
     `総実施数,${stats.total}`,
+    `実施率,${completionRate}%`,
     '',
     '【タイミング別】',
     'タイミング,実施数,実施率',
@@ -96,7 +101,10 @@ export function generateStatisticsCSV(
     const timing = i as TimingType;
     const timingInfo = TIMING_INFO[timing];
     const count = stats.byTiming[timing] || 0;
-    const rate = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
+    // 画面と同じ計算方法： そのタイミングでno_action以外の割合
+    const timingRecords = filteredRecords.filter((r) => r.timing === timing);
+    const completedInTiming = timingRecords.filter((r) => r.action !== 'no_action').length;
+    const rate = timingRecords.length > 0 ? Math.round((completedInTiming / timingRecords.length) * 100) : 0;
     lines.push(`${timingInfo.name},${count},${rate}%`);
   }
 
@@ -104,18 +112,15 @@ export function generateStatisticsCSV(
   lines.push('【実施内容別】');
   lines.push('実施内容,実施数,実施率');
   lines.push(
-    `手指消毒,${stats.byAction.hand_sanitizer},${
-      stats.total > 0 ? Math.round((stats.byAction.hand_sanitizer / stats.total) * 100) : 0
+    `手指消毒,${stats.byAction.hand_sanitizer},${stats.total > 0 ? Math.round((stats.byAction.hand_sanitizer / stats.total) * 100) : 0
     }%`
   );
   lines.push(
-    `手洗い,${stats.byAction.hand_wash},${
-      stats.total > 0 ? Math.round((stats.byAction.hand_wash / stats.total) * 100) : 0
+    `手洗い,${stats.byAction.hand_wash},${stats.total > 0 ? Math.round((stats.byAction.hand_wash / stats.total) * 100) : 0
     }%`
   );
   lines.push(
-    `実施なし,${stats.byAction.no_action},${
-      stats.total > 0 ? Math.round((stats.byAction.no_action / stats.total) * 100) : 0
+    `実施なし,${stats.byAction.no_action},${stats.total > 0 ? Math.round((stats.byAction.no_action / stats.total) * 100) : 0
     }%`
   );
 
@@ -133,10 +138,37 @@ function escapeCSVField(field: string): string {
   return escaped;
 }
 
-export function downloadCSV(content: string, filename: string): void {
+export async function downloadCSV(content: string, filename: string): Promise<void> {
+  // BOM（Byte Order Mark）を追加してExcelで日本語が正しく表示されるようにする
+  const BOM = '\uFEFF';
+  const csvWithBOM = BOM + content;
+
+  // モバイル環境（iOS/Android）での実装
+  if (Platform.OS === 'ios' || Platform.OS === 'android') {
+    try {
+      // CSVの内容をクリップボードにコピー
+      await Clipboard.setString(csvWithBOM);
+
+      // Share APIを使用してCSVを共有
+      const result = await Share.share({
+        message: csvWithBOM,
+        title: filename,
+      });
+
+      if (result.action === Share.sharedAction) {
+        Alert.alert('成功', 'CSVが共有されました');
+      }
+    } catch (error) {
+      console.error('CSV export error:', error);
+      Alert.alert(
+        'CSVエクスポート',
+        'CSVの内容がクリップボードにコピーされました。\nメールなどに貼り付けて使用してください。'
+      );
+    }
+  }
   // ブラウザ環境での実装
-  if (typeof window !== 'undefined' && typeof Blob !== 'undefined') {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  else if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof Blob !== 'undefined' && typeof document !== 'undefined') {
+    const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
 
