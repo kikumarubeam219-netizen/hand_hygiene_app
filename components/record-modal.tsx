@@ -7,6 +7,7 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from './themed-text';
@@ -19,13 +20,15 @@ interface RecordModalProps {
   visible: boolean;
   timing: TimingType | null;
   onClose: () => void;
-  onSave: (action: ActionType, notes?: string) => Promise<void>;
+  onSave: (action: ActionType, notes?: string, customDate?: Date) => Promise<void>;
 }
 
 export function RecordModal({ visible, timing, onClose, onSave }: RecordModalProps) {
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
@@ -40,14 +43,36 @@ export function RecordModal({ visible, timing, onClose, onSave }: RecordModalPro
 
     try {
       setLoading(true);
-      await onSave(selectedAction, notes);
+      await onSave(selectedAction, notes, selectedDate);
       setSelectedAction(null);
       setNotes('');
+      setSelectedDate(new Date());
       onClose();
     } catch (error) {
       console.error('Failed to save record:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 日付を変更する関数
+  const handleDateChange = (dateString: string) => {
+    const newDate = new Date(dateString);
+    if (!isNaN(newDate.getTime())) {
+      // 現在時刻を保持
+      const now = new Date();
+      newDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+      setSelectedDate(newDate);
+    }
+  };
+
+  // 時刻を変更する関数  
+  const handleTimeChange = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    if (!isNaN(hours) && !isNaN(minutes)) {
+      const newDate = new Date(selectedDate);
+      newDate.setHours(hours, minutes);
+      setSelectedDate(newDate);
     }
   };
 
@@ -170,10 +195,91 @@ export function RecordModal({ visible, timing, onClose, onSave }: RecordModalPro
             />
           </View>
 
-          {/* 時刻表示 */}
+          {/* 日付・時刻選択 */}
           <View style={styles.section}>
-            <ThemedText type="default" style={{ opacity: 0.6, fontSize: 12 }}>
-              記録時刻: {new Date().toLocaleString('ja-JP')}
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              記録日時
+            </ThemedText>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <ThemedText type="default" style={{ fontSize: 12, marginBottom: 4, opacity: 0.7 }}>
+                  日付
+                </ThemedText>
+                {Platform.OS === 'web' ? (
+                  <input
+                    type="date"
+                    value={selectedDate.toISOString().split('T')[0]}
+                    onChange={(e) => handleDateChange(e.target.value)}
+                    style={{
+                      padding: 12,
+                      borderRadius: 8,
+                      border: `1px solid ${colors.border}`,
+                      backgroundColor: colors.card,
+                      color: colors.text,
+                      fontSize: 14,
+                      minHeight: 44,
+                      width: '100%',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                ) : (
+                  <TextInput
+                    style={[
+                      styles.dateInput,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.card,
+                      },
+                    ]}
+                    value={selectedDate.toISOString().split('T')[0]}
+                    onChangeText={handleDateChange}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={colors.text + '80'}
+                  />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText type="default" style={{ fontSize: 12, marginBottom: 4, opacity: 0.7 }}>
+                  時刻
+                </ThemedText>
+                {Platform.OS === 'web' ? (
+                  <input
+                    type="time"
+                    value={`${selectedDate.getHours().toString().padStart(2, '0')}:${selectedDate.getMinutes().toString().padStart(2, '0')}`}
+                    onChange={(e) => handleTimeChange(e.target.value)}
+                    style={{
+                      padding: 12,
+                      borderRadius: 8,
+                      border: `1px solid ${colors.border}`,
+                      backgroundColor: colors.card,
+                      color: colors.text,
+                      fontSize: 14,
+                      minHeight: 44,
+                      width: '100%',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                ) : (
+                  <TextInput
+                    style={[
+                      styles.dateInput,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.card,
+                      },
+                    ]}
+                    value={`${selectedDate.getHours().toString().padStart(2, '0')}:${selectedDate.getMinutes().toString().padStart(2, '0')}`}
+                    onChangeText={handleTimeChange}
+                    placeholder="HH:MM"
+                    placeholderTextColor={colors.text + '80'}
+                  />
+                )}
+              </View>
+            </View>
+            <ThemedText type="default" style={{ opacity: 0.5, fontSize: 11, marginTop: 8 }}>
+              過去の日付を選択して記録できます
             </ThemedText>
           </View>
         </ScrollView>
@@ -293,6 +399,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 44,
   },
   footer: {
     flexDirection: 'row',

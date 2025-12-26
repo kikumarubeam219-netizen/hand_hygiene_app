@@ -4,12 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DateRangePicker } from '@/components/date-range-picker';
 import { useHygieneStorage } from '@/hooks/use-hygiene-storage';
 import { TIMING_INFO, TimingType, ACTION_LABELS, HygieneRecord } from '@/lib/types';
 import { TimingColors, Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-type FilterPeriod = 'today' | 'week' | 'month';
+type FilterPeriod = 'today' | 'week' | 'month' | 'custom';
 
 export default function ChecklistScreen() {
   const insets = useSafeAreaInsets();
@@ -18,11 +19,20 @@ export default function ChecklistScreen() {
 
   const { records, deleteRecord } = useHygieneStorage();
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('today');
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState(new Date());
+  const [customEndDate, setCustomEndDate] = useState(new Date());
 
-  // フィルタリング
-  const filteredRecords = useMemo(() => {
-    const now = new Date();
-    let startDate = new Date();
+  // 期間の計算
+  const getDateRange = () => {
+    if (filterPeriod === 'custom') {
+      return { startDate: customStartDate, endDate: customEndDate };
+    }
+
+    const endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+
+    const startDate = new Date();
     startDate.setHours(0, 0, 0, 0);
 
     if (filterPeriod === 'week') {
@@ -32,8 +42,22 @@ export default function ChecklistScreen() {
       startDate.setDate(1);
     }
 
-    return records.filter((r) => r.timestamp >= startDate.getTime());
-  }, [records, filterPeriod]);
+    return { startDate, endDate };
+  };
+
+  const { startDate, endDate } = getDateRange();
+
+  // フィルタリング
+  const filteredRecords = useMemo(() => {
+    return records.filter((r) => r.timestamp >= startDate.getTime() && r.timestamp <= endDate.getTime());
+  }, [records, filterPeriod, customStartDate, customEndDate]);
+
+  const handleCustomDateRange = (start: Date, end: Date) => {
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+    setFilterPeriod('custom');
+    setDatePickerVisible(false);
+  };
 
   // 日付別にグループ化
   const groupedRecords = useMemo(() => {
@@ -61,7 +85,7 @@ export default function ChecklistScreen() {
   const handleDelete = async (id: string) => {
     // Web環境とモバイル環境で処理を分ける
     const { Platform } = require('react-native');
-    
+
     if (Platform.OS === 'web') {
       // Web環境ではwindow.confirmを使用
       const confirmed = window.confirm('この記録を削除してもよろしいですか?');
@@ -79,7 +103,7 @@ export default function ChecklistScreen() {
         '記録を削除',
         'この記録を削除してもよろしいですか?',
         [
-          { text: 'キャンセル', onPress: () => {}, style: 'cancel' },
+          { text: 'キャンセル', onPress: () => { }, style: 'cancel' },
           {
             text: '削除',
             onPress: async () => {
@@ -142,7 +166,46 @@ export default function ChecklistScreen() {
             </ThemedText>
           </Pressable>
         ))}
+        <Pressable
+          onPress={() => setDatePickerVisible(true)}
+          style={[
+            styles.filterButton,
+            filterPeriod === 'custom' && [
+              styles.filterButtonActive,
+              { backgroundColor: colors.tint },
+            ],
+            { borderColor: colors.border },
+          ]}
+        >
+          <ThemedText
+            type="defaultSemiBold"
+            style={{
+              color: filterPeriod === 'custom' ? '#fff' : colors.text,
+              fontSize: 12,
+            }}
+          >
+            期間指定
+          </ThemedText>
+        </Pressable>
       </View>
+
+      {/* 期間ラベル */}
+      {filterPeriod === 'custom' && (
+        <ThemedText type="default" style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
+          {customStartDate.toLocaleDateString('ja-JP')} ～ {customEndDate.toLocaleDateString('ja-JP')}
+        </ThemedText>
+      )}
+
+      {/* 日付ピッカー */}
+      {datePickerVisible && (
+        <DateRangePicker
+          visible={datePickerVisible}
+          startDate={customStartDate}
+          endDate={customEndDate}
+          onConfirm={handleCustomDateRange}
+          onCancel={() => setDatePickerVisible(false)}
+        />
+      )}
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {Object.entries(groupedRecords).length === 0 ? (

@@ -40,10 +40,10 @@ export default function HomeScreen() {
     setModalVisible(true);
   };
 
-  const handleSaveRecord = async (action: ActionType, notes?: string) => {
+  const handleSaveRecord = async (action: ActionType, notes?: string, customDate?: Date) => {
     if (!selectedTiming) return;
     try {
-      await addRecord(selectedTiming, action, notes);
+      await addRecord(selectedTiming, action, notes, customDate);
     } catch (error) {
       console.error('Failed to save record:', error);
     }

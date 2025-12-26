@@ -3,7 +3,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { SymbolWeight, SymbolViewProps } from "expo-symbols";
 import { ComponentProps } from "react";
-import { OpaqueColorValue, type StyleProp, type TextStyle } from "react-native";
+import { OpaqueColorValue, Platform, type StyleProp, type TextStyle, Text } from "react-native";
 
 type IconMapping = Record<SymbolViewProps["name"], ComponentProps<typeof MaterialIcons>["name"]>;
 type IconSymbolName = "house.fill" | "paperplane.fill" | "chevron.left.forwardslash.chevron.right" | "chevron.right" | "chart.bar.fill" | "checkmark.square.fill" | "gearshape.fill";
@@ -23,6 +23,17 @@ const MAPPING: Record<IconSymbolName, ComponentProps<typeof MaterialIcons>["name
   "gearshape.fill": "settings",
 };
 
+// Web用のテキストフォールバック
+const TEXT_FALLBACK: Record<IconSymbolName, string> = {
+  "house.fill": "🏠",
+  "paperplane.fill": "📤",
+  "chevron.left.forwardslash.chevron.right": "< />",
+  "chevron.right": "›",
+  "chart.bar.fill": "📊",
+  "checkmark.square.fill": "☑️",
+  "gearshape.fill": "⚙️",
+};
+
 /**
  * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
  * This ensures a consistent look across platforms, and optimal resource usage.
@@ -40,5 +51,14 @@ export function IconSymbol({
   style?: StyleProp<TextStyle>;
   weight?: SymbolWeight;
 }) {
+  // Web環境ではMaterialIconsが表示されない場合があるため、絵文字をフォールバックとして使用
+  if (Platform.OS === 'web') {
+    return (
+      <Text style={[{ fontSize: size, color: color as string }, style]}>
+        {TEXT_FALLBACK[name]}
+      </Text>
+    );
+  }
+
   return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
 }

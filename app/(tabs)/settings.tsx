@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, View, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { ScrollView, StyleSheet, View, TextInput, Pressable, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DateRangePicker } from '@/components/date-range-picker';
 import { useHygieneStorage } from '@/hooks/use-hygiene-storage';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -24,6 +25,11 @@ export default function SettingsScreen() {
   const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  // PDF用の日付選択
+  const [pdfStartDate, setPdfStartDate] = useState(new Date());
+  const [pdfEndDate, setPdfEndDate] = useState(new Date());
+  const [pdfDatePickerVisible, setPdfDatePickerVisible] = useState(false);
 
   useEffect(() => {
     setUserName(userInfo.userName || '');
@@ -65,11 +71,16 @@ export default function SettingsScreen() {
 
       setIsGeneratingPDF(true);
 
-      const today = new Date();
-      const startDate = new Date();
+      // 選択された日付を使用
+      const startDate = new Date(pdfStartDate);
       startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date();
+      const endDate = new Date(pdfEndDate);
       endDate.setHours(23, 59, 59, 999);
+
+      // 日付ラベルを作成
+      const dateLabel = pdfStartDate.toISOString().split('T')[0] === pdfEndDate.toISOString().split('T')[0]
+        ? pdfStartDate.toLocaleDateString('ja-JP')
+        : `${pdfStartDate.toLocaleDateString('ja-JP')}～${pdfEndDate.toLocaleDateString('ja-JP')}`;
 
       // 観察フォーム形式HTMLを生成
       const html = generateObservationFormHTML(
@@ -80,7 +91,7 @@ export default function SettingsScreen() {
           ward,
           section,
           periodNumber: '',
-          date: today.toLocaleDateString('ja-JP'),
+          date: dateLabel,
           sessionNumber: '',
           observer,
           pageNumber: '1',
@@ -91,7 +102,7 @@ export default function SettingsScreen() {
       );
 
       // HTMLをダウンロード
-      const filename = `手指衰理記録_${today.toISOString().split('T')[0]}`;
+      const filename = `手指衛生記録_${pdfStartDate.toISOString().split('T')[0]}`;
       await downloadPDF(html, filename);
 
       Alert.alert('成功', 'PDFを生成しました。ファイルを共有できます。');
@@ -104,12 +115,19 @@ export default function SettingsScreen() {
     }
   };
 
+  // PDF日付範囲の確定
+  const handlePdfDateRange = (start: Date, end: Date) => {
+    setPdfStartDate(start);
+    setPdfEndDate(end);
+    setPdfDatePickerVisible(false);
+  };
+
   const handleResetData = () => {
     Alert.alert(
       'データをリセット',
       'すべての記録データを削除してもよろしいですか？この操作は取り消せません。',
       [
-        { text: 'キャンセル', onPress: () => {}, style: 'cancel' },
+        { text: 'キャンセル', onPress: () => { }, style: 'cancel' },
         {
           text: 'リセット',
           onPress: async () => {
@@ -337,6 +355,52 @@ export default function SettingsScreen() {
             PDF出力
           </ThemedText>
 
+          {/* 日付選択 */}
+          <View style={styles.formGroup}>
+            <ThemedText type="defaultSemiBold" style={styles.label}>
+              出力期間
+            </ThemedText>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <Pressable
+                onPress={() => setPdfDatePickerVisible(true)}
+                style={[
+                  styles.dateSelectButton,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                ]}
+              >
+                <ThemedText type="default" style={{ fontSize: 14 }}>
+                  {pdfStartDate.toLocaleDateString('ja-JP')} ～ {pdfEndDate.toLocaleDateString('ja-JP')}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const today = new Date();
+                  setPdfStartDate(today);
+                  setPdfEndDate(today);
+                }}
+                style={[
+                  styles.todayButton,
+                  { borderColor: colors.tint },
+                ]}
+              >
+                <ThemedText type="default" style={{ fontSize: 12, color: colors.tint }}>
+                  今日
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* 日付ピッカー */}
+          {pdfDatePickerVisible && (
+            <DateRangePicker
+              visible={pdfDatePickerVisible}
+              startDate={pdfStartDate}
+              endDate={pdfEndDate}
+              onConfirm={handlePdfDateRange}
+              onCancel={() => setPdfDatePickerVisible(false)}
+            />
+          )}
+
           <Pressable
             onPress={handleGeneratePDF}
             disabled={isGeneratingPDF}
@@ -351,13 +415,13 @@ export default function SettingsScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>
-                本日のPDFを生成
+                PDFを生成
               </ThemedText>
             )}
           </Pressable>
 
           <ThemedText type="default" style={styles.helpText}>
-            本日の観察フォームをPDF形式で生成します。泉州感染防止ネットワーク公式フォーム形式で出力されます。
+            選択した期間の観察フォームをPDF形式で生成します。泉州感染防止ネットワーク公式フォーム形式で出力されます。
           </ThemedText>
         </View>
 
@@ -541,5 +605,18 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 14,
     marginBottom: 4,
+  },
+  dateSelectButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  todayButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
   },
 });

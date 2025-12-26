@@ -56,13 +56,14 @@ export function useHygieneStorage() {
 
   // 新しい記録を追加
   const addRecord = useCallback(
-    async (timing: TimingType, action: ActionType, notes?: string) => {
+    async (timing: TimingType, action: ActionType, notes?: string, customDate?: Date) => {
       try {
+        const timestamp = customDate ? customDate.getTime() : Date.now();
         const newRecord: HygieneRecord = {
           id: Date.now().toString(),
           timing,
           action,
-          timestamp: Date.now(),
+          timestamp,
           notes,
           userName: userInfo.userName,
           facilityName: userInfo.facilityName,

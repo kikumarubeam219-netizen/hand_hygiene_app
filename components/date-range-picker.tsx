@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, View, TextInput } from 'react-native';
+import { Modal, Pressable, StyleSheet, View, TextInput, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from './themed-text';
@@ -79,50 +79,82 @@ export function DateRangePicker({
 
         {/* コンテンツ */}
         <View style={styles.content}>
+          {/* 開始日 */}
           <View style={styles.section}>
             <ThemedText type="defaultSemiBold" style={styles.label}>
               開始日
             </ThemedText>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  borderColor: colors.border,
+            {Platform.OS === 'web' ? (
+              <input
+                type="date"
+                value={tempStartDate}
+                onChange={(e) => setTempStartDate(e.target.value)}
+                style={{
+                  padding: 12,
+                  borderRadius: 8,
+                  border: `1px solid ${colors.border}`,
                   backgroundColor: colors.card,
-                },
-              ]}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.text + '80'}
-              value={tempStartDate}
-              onChangeText={setTempStartDate}
-            />
-            <ThemedText type="default" style={styles.hint}>
-              例: 2024-12-01
-            </ThemedText>
+                  color: colors.text,
+                  fontSize: 14,
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}
+              />
+            ) : (
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                  },
+                ]}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.text + '80'}
+                value={tempStartDate}
+                onChangeText={setTempStartDate}
+              />
+            )}
           </View>
 
+          {/* 終了日 */}
           <View style={styles.section}>
             <ThemedText type="defaultSemiBold" style={styles.label}>
               終了日
             </ThemedText>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  borderColor: colors.border,
+            {Platform.OS === 'web' ? (
+              <input
+                type="date"
+                value={tempEndDate}
+                onChange={(e) => setTempEndDate(e.target.value)}
+                style={{
+                  padding: 12,
+                  borderRadius: 8,
+                  border: `1px solid ${colors.border}`,
                   backgroundColor: colors.card,
-                },
-              ]}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.text + '80'}
-              value={tempEndDate}
-              onChangeText={setTempEndDate}
-            />
-            <ThemedText type="default" style={styles.hint}>
-              例: 2024-12-31
-            </ThemedText>
+                  color: colors.text,
+                  fontSize: 14,
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}
+              />
+            ) : (
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                  },
+                ]}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.text + '80'}
+                value={tempEndDate}
+                onChangeText={setTempEndDate}
+              />
+            )}
           </View>
 
           {/* プリセット */}
@@ -231,10 +263,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     marginBottom: 4,
-  },
-  hint: {
-    fontSize: 12,
-    opacity: 0.6,
   },
   presetButtons: {
     flexDirection: 'row',
