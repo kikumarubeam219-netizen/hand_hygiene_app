@@ -4,7 +4,6 @@ import {
   collection,
   query,
   where,
-  orderBy,
   onSnapshot,
   addDoc,
   deleteDoc,
@@ -86,11 +85,10 @@ export function useHygieneStorage() {
           });
         }
 
-        // チームの記録をリアルタイムで監視
+        // チームの記録をリアルタイムで監視（orderByは複合インデックスが必要なので削除）
         const recordsQuery = query(
           collection(db, 'records'),
-          where('teamId', '==', teamId),
-          orderBy('timestamp', 'desc')
+          where('teamId', '==', teamId)
         );
 
         const unsubscribe = onSnapshot(recordsQuery, (snapshot) => {
@@ -109,6 +107,8 @@ export function useHygieneStorage() {
               facilityName: data.facilityName,
             });
           });
+          // クライアント側でソート（新しい順）
+          recordsList.sort((a, b) => b.timestamp - a.timestamp);
           setRecords(recordsList);
           setLoading(false);
         }, (error) => {
