@@ -612,26 +612,38 @@ export default function SettingsScreen() {
           {/* チーム離脱 */}
           {userInfo.teamId && (
             <Pressable
-              onPress={() => {
-                Alert.alert(
-                  'チームから離脱',
-                  'チームから離脱してもよろしいですか？',
-                  [
-                    { text: 'キャンセル', style: 'cancel' },
-                    {
-                      text: '離脱',
-                      onPress: async () => {
-                        try {
-                          await leaveTeam();
-                          Alert.alert('完了', 'チームから離脱しました');
-                        } catch (error: any) {
-                          Alert.alert('エラー', error.message);
-                        }
+              onPress={async () => {
+                if (Platform.OS === 'web') {
+                  const confirmed = window.confirm('チームから離脱してもよろしいですか？');
+                  if (confirmed) {
+                    try {
+                      await leaveTeam();
+                      window.alert('チームから離脱しました');
+                    } catch (error: any) {
+                      window.alert('エラー: ' + error.message);
+                    }
+                  }
+                } else {
+                  Alert.alert(
+                    'チームから離脱',
+                    'チームから離脱してもよろしいですか？',
+                    [
+                      { text: 'キャンセル', style: 'cancel' },
+                      {
+                        text: '離脱',
+                        onPress: async () => {
+                          try {
+                            await leaveTeam();
+                            Alert.alert('完了', 'チームから離脱しました');
+                          } catch (error: any) {
+                            Alert.alert('エラー', error.message);
+                          }
+                        },
+                        style: 'destructive',
                       },
-                      style: 'destructive',
-                    },
-                  ]
-                );
+                    ]
+                  );
+                }
               }}
               style={[styles.button, { backgroundColor: '#FF9500', marginBottom: 8 }]}
             >
@@ -642,24 +654,35 @@ export default function SettingsScreen() {
           )}
 
           <Pressable
-            onPress={() => {
-              Alert.alert(
-                'ログアウト',
-                'ログアウトしてもよろしいですか？',
-                [
-                  { text: 'キャンセル', style: 'cancel' },
-                  {
-                    text: 'ログアウト',
-                    onPress: async () => {
-                      try {
-                        await logout();
-                      } catch (error) {
-                        console.error('Failed to logout:', error);
-                      }
+            onPress={async () => {
+              if (Platform.OS === 'web') {
+                const confirmed = window.confirm('ログアウトしてもよろしいですか？');
+                if (confirmed) {
+                  try {
+                    await logout();
+                  } catch (error) {
+                    console.error('Failed to logout:', error);
+                  }
+                }
+              } else {
+                Alert.alert(
+                  'ログアウト',
+                  'ログアウトしてもよろしいですか？',
+                  [
+                    { text: 'キャンセル', style: 'cancel' },
+                    {
+                      text: 'ログアウト',
+                      onPress: async () => {
+                        try {
+                          await logout();
+                        } catch (error) {
+                          console.error('Failed to logout:', error);
+                        }
+                      },
                     },
-                  },
-                ]
-              );
+                  ]
+                );
+              }
             }}
             style={[styles.button, { borderWidth: 1, borderColor: colors.border }]}
           >
