@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ユーザー情報
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // チーム情報
+    match /teams/{teamId} {
+      // チームメンバーのみ読み取り可能
+      allow read: if request.auth != null && 
+        (resource.data.members.hasAny([request.auth.uid]) || resource.data.ownerId == request.auth.uid);
+      // 認証済みユーザーは作成可能
+      allow create: if request.auth != null;
+      // オーナーまたはメンバーのみ更新可能
+      allow update: if request.auth != null && 
+        (resource.data.members.hasAny([request.auth.uid]) || resource.data.ownerId == request.auth.uid);
+      // オーナーのみ削除可能
+      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+    }
+    
+    // 記録データ
+    match /records/{recordId} {
+      // 同じチームのメンバーのみアクセス可能
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+  }
+}

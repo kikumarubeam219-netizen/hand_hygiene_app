@@ -6,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { useHygieneStorage } from '@/hooks/use-hygiene-storage';
+import { useAuth } from '@/hooks/use-auth';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { generateObservationFormHTML, downloadPDF } from '@/lib/pdf-export';
@@ -15,7 +16,9 @@ export default function SettingsScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
-  const { userInfo, saveUserInfo, resetAllData, records } = useHygieneStorage();
+  const { userInfo, saveUserInfo, resetAllData, records, createTeam, joinTeam, leaveTeam } = useHygieneStorage();
+  const { user, logout, teamInfo } = useAuth();
+
   const [userName, setUserName] = useState('');
   const [facilityName, setFacilityName] = useState('');
   const [department, setDepartment] = useState('');
@@ -30,6 +33,11 @@ export default function SettingsScreen() {
   const [pdfStartDate, setPdfStartDate] = useState(new Date());
   const [pdfEndDate, setPdfEndDate] = useState(new Date());
   const [pdfDatePickerVisible, setPdfDatePickerVisible] = useState(false);
+
+  // チーム管理
+  const [teamName, setTeamName] = useState('');
+  const [joinTeamId, setJoinTeamId] = useState('');
+  const [isTeamLoading, setIsTeamLoading] = useState(false);
 
   useEffect(() => {
     setUserName(userInfo.userName || '');
@@ -485,6 +493,182 @@ export default function SettingsScreen() {
           </ThemedText>
         </View>
 
+        {/* アカウント管理 */}
+        <View style={styles.section}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            アカウント
+          </ThemedText>
+
+          <View style={[styles.infoContainer, { marginBottom: 12 }]}>
+            <ThemedText type="default" style={styles.infoText}>
+              ログイン中: {user?.email || 'ゲスト'}
+            </ThemedText>
+            {teamInfo.teamName && (
+              <ThemedText type="default" style={[styles.infoText, { fontSize: 12 }]}>
+                チーム: {teamInfo.teamName}
+              </ThemedText>
+            )}
+            {userInfo.teamId && (
+              <ThemedText type="default" style={[styles.infoText, { fontSize: 10, opacity: 0.6 }]}>
+                チームID: {userInfo.teamId}
+              </ThemedText>
+            )}
+          </View>
+
+          {/* チーム作成 */}
+          {!userInfo.teamId && (
+            <View style={styles.formGroup}>
+              <ThemedText type="defaultSemiBold" style={styles.label}>
+                新しいチームを作成
+              </ThemedText>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.card },
+                  ]}
+                  placeholder="チーム名"
+                  placeholderTextColor={colors.text + '80'}
+                  value={teamName}
+                  onChangeText={setTeamName}
+                />
+                <Pressable
+                  onPress={async () => {
+                    if (!teamName) {
+                      Alert.alert('エラー', 'チーム名を入力してください');
+                      return;
+                    }
+                    setIsTeamLoading(true);
+                    try {
+                      const newTeamId = await createTeam(teamName);
+                      Alert.alert('成功', `チームを作成しました\nチームID: ${newTeamId}`);
+                      setTeamName('');
+                    } catch (error: any) {
+                      Alert.alert('エラー', error.message);
+                    } finally {
+                      setIsTeamLoading(false);
+                    }
+                  }}
+                  disabled={isTeamLoading}
+                  style={[styles.button, { backgroundColor: colors.tint, paddingHorizontal: 16 }]}
+                >
+                  {isTeamLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>作成</ThemedText>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* チーム参加 */}
+          {!userInfo.teamId && (
+            <View style={styles.formGroup}>
+              <ThemedText type="defaultSemiBold" style={styles.label}>
+                既存のチームに参加
+              </ThemedText>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.card },
+                  ]}
+                  placeholder="チームID"
+                  placeholderTextColor={colors.text + '80'}
+                  value={joinTeamId}
+                  onChangeText={setJoinTeamId}
+                />
+                <Pressable
+                  onPress={async () => {
+                    if (!joinTeamId) {
+                      Alert.alert('エラー', 'チームIDを入力してください');
+                      return;
+                    }
+                    setIsTeamLoading(true);
+                    try {
+                      await joinTeam(joinTeamId);
+                      Alert.alert('成功', 'チームに参加しました');
+                      setJoinTeamId('');
+                    } catch (error: any) {
+                      Alert.alert('エラー', error.message);
+                    } finally {
+                      setIsTeamLoading(false);
+                    }
+                  }}
+                  disabled={isTeamLoading}
+                  style={[styles.button, { backgroundColor: '#34C759', paddingHorizontal: 16 }]}
+                >
+                  {isTeamLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>参加</ThemedText>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* チーム離脱 */}
+          {userInfo.teamId && (
+            <Pressable
+              onPress={() => {
+                Alert.alert(
+                  'チームから離脱',
+                  'チームから離脱してもよろしいですか？',
+                  [
+                    { text: 'キャンセル', style: 'cancel' },
+                    {
+                      text: '離脱',
+                      onPress: async () => {
+                        try {
+                          await leaveTeam();
+                          Alert.alert('完了', 'チームから離脱しました');
+                        } catch (error: any) {
+                          Alert.alert('エラー', error.message);
+                        }
+                      },
+                      style: 'destructive',
+                    },
+                  ]
+                );
+              }}
+              style={[styles.button, { backgroundColor: '#FF9500', marginBottom: 8 }]}
+            >
+              <ThemedText type="defaultSemiBold" style={{ color: '#fff' }}>
+                チームから離脱
+              </ThemedText>
+            </Pressable>
+          )}
+
+          <Pressable
+            onPress={() => {
+              Alert.alert(
+                'ログアウト',
+                'ログアウトしてもよろしいですか？',
+                [
+                  { text: 'キャンセル', style: 'cancel' },
+                  {
+                    text: 'ログアウト',
+                    onPress: async () => {
+                      try {
+                        await logout();
+                      } catch (error) {
+                        console.error('Failed to logout:', error);
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+            style={[styles.button, { borderWidth: 1, borderColor: colors.border }]}
+          >
+            <ThemedText type="defaultSemiBold">
+              ログアウト
+            </ThemedText>
+          </Pressable>
+        </View>
+
         {/* アプリ情報 */}
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
@@ -496,7 +680,7 @@ export default function SettingsScreen() {
               手指衛生5つのタイミング記録アプリ
             </ThemedText>
             <ThemedText type="default" style={[styles.infoText, { fontSize: 12 }]}>
-              バージョン 1.0.0
+              バージョン 1.1.0 (クラウド同期対応)
             </ThemedText>
             <ThemedText type="default" style={[styles.infoText, { fontSize: 12 }]}>
               WHO観察フォーム対応

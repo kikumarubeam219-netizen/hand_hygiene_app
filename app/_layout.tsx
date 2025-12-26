@@ -5,7 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
-import { Platform } from "react-native";
+import { Platform, ActivityIndicator, View } from "react-native";
 import {
   SafeAreaFrameContext,
   SafeAreaInsetsContext,
@@ -17,6 +17,8 @@ import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/manus-runtime";
+import { useAuth } from "@/hooks/use-auth";
+import { AuthScreen } from "@/components/auth-screen";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
@@ -25,6 +27,36 @@ const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 export const unstable_settings = {
   anchor: "(tabs)",
 };
+
+// 認証が必要なコンテンツ
+function AuthenticatedContent() {
+  return (
+    <Stack>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="modal" options={{ presentation: "modal", title: "Modal" }} />
+      <Stack.Screen name="oauth/callback" options={{ headerShown: false }} />
+    </Stack>
+  );
+}
+
+// 認証状態に応じたコンテンツ
+function AppContent() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  return <AuthenticatedContent />;
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -76,11 +108,7 @@ export default function RootLayout() {
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="modal" options={{ presentation: "modal", title: "Modal" }} />
-              <Stack.Screen name="oauth/callback" options={{ headerShown: false }} />
-            </Stack>
+            <AppContent />
             <StatusBar style="auto" />
           </ThemeProvider>
         </QueryClientProvider>

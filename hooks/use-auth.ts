@@ -1,143 +1,149 @@
-import * as Api from "@/lib/api";
-import * as Auth from "@/lib/auth";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Platform } from "react-native";
+import { useState, useEffect, useCallback } from 'react';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+  User,
+} from 'firebase/auth';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db, onAuthStateChanged } from '@/lib/firebase';
 
-type UseAuthOptions = {
-  autoFetch?: boolean;
-};
+interface AuthState {
+  user: User | null;
+  loading: boolean;
+  error: string | null;
+}
 
-export function useAuth(options?: UseAuthOptions) {
-  const { autoFetch = true } = options ?? {};
-  const [user, setUser] = useState<Auth.User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+interface TeamInfo {
+  teamId: string | null;
+  teamName: string | null;
+}
 
-  const fetchUser = useCallback(async () => {
-    console.log("[useAuth] fetchUser called");
-    try {
-      setLoading(true);
-      setError(null);
+export function useAuth() {
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    loading: true,
+    error: null,
+  });
+  const [teamInfo, setTeamInfo] = useState<TeamInfo>({
+    teamId: null,
+    teamName: null,
+  });
 
-      // Web platform: use cookie-based auth, fetch user from API
-      if (Platform.OS === "web") {
-        console.log("[useAuth] Web platform: fetching user from API...");
-        const apiUser = await Api.getMe();
-        console.log("[useAuth] API user response:", apiUser);
-
-        if (apiUser) {
-          const userInfo: Auth.User = {
-            id: apiUser.id,
-            openId: apiUser.openId,
-            name: apiUser.name,
-            email: apiUser.email,
-            loginMethod: apiUser.loginMethod,
-            lastSignedIn: new Date(apiUser.lastSignedIn),
-          };
-          setUser(userInfo);
-          // Cache user info in localStorage for faster subsequent loads
-          await Auth.setUserInfo(userInfo);
-          console.log("[useAuth] Web user set from API:", userInfo);
-        } else {
-          console.log("[useAuth] Web: No authenticated user from API");
-          setUser(null);
-          await Auth.clearUserInfo();
+  // 認証状態の監視
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // ユーザーのチーム情報を取得
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            if (userData.teamId) {
+              const teamDoc = await getDoc(doc(db, 'teams', userData.teamId));
+              if (teamDoc.exists()) {
+                setTeamInfo({
+                  teamId: userData.teamId,
+                  teamName: teamDoc.data().name,
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to get user info:', error);
         }
-        return;
-      }
-
-      // Native platform: use token-based auth
-      console.log("[useAuth] Native platform: checking for session token...");
-      const sessionToken = await Auth.getSessionToken();
-      console.log(
-        "[useAuth] Session token:",
-        sessionToken ? `present (${sessionToken.substring(0, 20)}...)` : "missing",
-      );
-      if (!sessionToken) {
-        console.log("[useAuth] No session token, setting user to null");
-        setUser(null);
-        return;
-      }
-
-      // Use cached user info for native (token validates the session)
-      const cachedUser = await Auth.getUserInfo();
-      console.log("[useAuth] Cached user:", cachedUser);
-      if (cachedUser) {
-        console.log("[useAuth] Using cached user info");
-        setUser(cachedUser);
       } else {
-        console.log("[useAuth] No cached user, setting user to null");
-        setUser(null);
+        setTeamInfo({ teamId: null, teamName: null });
       }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error("Failed to fetch user");
-      console.error("[useAuth] fetchUser error:", error);
-      setError(error);
-      setUser(null);
-    } finally {
-      setLoading(false);
-      console.log("[useAuth] fetchUser completed, loading:", false);
+      setAuthState({ user, loading: false, error: null });
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // ログイン
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      setAuthState((prev) => ({ ...prev, loading: true, error: null }));
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error: any) {
+      let message = 'ログインに失敗しました';
+      if (error.code === 'auth/user-not-found') {
+        message = 'ユーザーが見つかりません';
+      } else if (error.code === 'auth/wrong-password') {
+        message = 'パスワードが間違っています';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'メールアドレスの形式が正しくありません';
+      } else if (error.code === 'auth/invalid-credential') {
+        message = 'メールアドレスまたはパスワードが間違っています';
+      }
+      setAuthState((prev) => ({ ...prev, loading: false, error: message }));
+      throw new Error(message);
     }
   }, []);
 
+  // 新規登録
+  const signup = useCallback(async (email: string, password: string) => {
+    try {
+      setAuthState((prev) => ({ ...prev, loading: true, error: null }));
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Firestoreにユーザー情報を保存
+      await setDoc(doc(db, 'users', result.user.uid), {
+        email: result.user.email,
+        createdAt: serverTimestamp(),
+        teamId: null,
+      });
+    } catch (error: any) {
+      let message = '登録に失敗しました';
+      if (error.code === 'auth/email-already-in-use') {
+        message = 'このメールアドレスは既に使用されています';
+      } else if (error.code === 'auth/weak-password') {
+        message = 'パスワードは6文字以上で入力してください';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'メールアドレスの形式が正しくありません';
+      }
+      setAuthState((prev) => ({ ...prev, loading: false, error: message }));
+      throw new Error(message);
+    }
+  }, []);
+
+  // ログアウト
   const logout = useCallback(async () => {
     try {
-      await Api.logout();
-    } catch (err) {
-      console.error("[Auth] Logout API call failed:", err);
-      // Continue with logout even if API call fails
-    } finally {
-      await Auth.removeSessionToken();
-      await Auth.clearUserInfo();
-      setUser(null);
-      setError(null);
+      await signOut(auth);
+    } catch (error) {
+      console.error('Failed to logout:', error);
+      throw error;
     }
   }, []);
 
-  const isAuthenticated = useMemo(() => Boolean(user), [user]);
-
-  useEffect(() => {
-    console.log("[useAuth] useEffect triggered, autoFetch:", autoFetch, "platform:", Platform.OS);
-    if (autoFetch) {
-      if (Platform.OS === "web") {
-        // Web: fetch user from API directly (user will login manually if needed)
-        console.log("[useAuth] Web: fetching user from API...");
-        fetchUser();
-      } else {
-        // Native: check for cached user info first for faster initial load
-        Auth.getUserInfo().then((cachedUser) => {
-          console.log("[useAuth] Native cached user check:", cachedUser);
-          if (cachedUser) {
-            console.log("[useAuth] Native: setting cached user immediately");
-            setUser(cachedUser);
-            setLoading(false);
-          } else {
-            // No cached user, check session token
-            fetchUser();
-          }
-        });
+  // パスワードリセット
+  const resetPassword = useCallback(async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error: any) {
+      let message = 'パスワードリセットに失敗しました';
+      if (error.code === 'auth/user-not-found') {
+        message = 'このメールアドレスは登録されていません';
       }
-    } else {
-      console.log("[useAuth] autoFetch disabled, setting loading to false");
-      setLoading(false);
+      throw new Error(message);
     }
-  }, [autoFetch, fetchUser]);
+  }, []);
 
-  useEffect(() => {
-    console.log("[useAuth] State updated:", {
-      hasUser: !!user,
-      loading,
-      isAuthenticated,
-      error: error?.message,
-    });
-  }, [user, loading, isAuthenticated, error]);
+  // 認証済みかどうか
+  const isAuthenticated = authState.user !== null;
 
   return {
-    user,
-    loading,
-    error,
+    user: authState.user,
+    loading: authState.loading,
+    error: authState.error,
     isAuthenticated,
-    refresh: fetchUser,
+    teamInfo,
+    login,
+    signup,
     logout,
+    resetPassword,
   };
 }
