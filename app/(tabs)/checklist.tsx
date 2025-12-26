@@ -59,25 +59,42 @@ export default function ChecklistScreen() {
   }, [filteredRecords]);
 
   const handleDelete = async (id: string) => {
-    Alert.alert(
-      '記録を削除',
-      'この記録を削除してもよろしいですか?',
-      [
-        { text: 'キャンセル', onPress: () => {}, style: 'cancel' },
-        {
-          text: '削除',
-          onPress: async () => {
-            try {
-              await deleteRecord(id);
-            } catch (error) {
-              console.error('Failed to delete record:', error);
-              Alert.alert('エラー', '記録の削除に失敗しました');
-            }
+    // Web環境とモバイル環境で処理を分ける
+    const { Platform } = require('react-native');
+    
+    if (Platform.OS === 'web') {
+      // Web環境ではwindow.confirmを使用
+      const confirmed = window.confirm('この記録を削除してもよろしいですか?');
+      if (confirmed) {
+        try {
+          await deleteRecord(id);
+        } catch (error) {
+          console.error('Failed to delete record:', error);
+          window.alert('記録の削除に失敗しました');
+        }
+      }
+    } else {
+      // モバイル環境ではAlert.alertを使用
+      Alert.alert(
+        '記録を削除',
+        'この記録を削除してもよろしいですか?',
+        [
+          { text: 'キャンセル', onPress: () => {}, style: 'cancel' },
+          {
+            text: '削除',
+            onPress: async () => {
+              try {
+                await deleteRecord(id);
+              } catch (error) {
+                console.error('Failed to delete record:', error);
+                Alert.alert('エラー', '記録の削除に失敗しました');
+              }
+            },
+            style: 'destructive',
           },
-          style: 'destructive',
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   return (

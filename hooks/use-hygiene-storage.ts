@@ -84,15 +84,21 @@ export function useHygieneStorage() {
   const deleteRecord = useCallback(
     async (id: string) => {
       try {
-        const updatedRecords = records.filter((r) => r.id !== id);
-        setRecords(updatedRecords);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRecords));
+        // 関数型stateアップデートを使用して最新のrecordsを参照
+        setRecords((prevRecords) => {
+          const updatedRecords = prevRecords.filter((r) => r.id !== id);
+          // AsyncStorageへの保存は非同期で行う
+          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRecords)).catch((error) => {
+            console.error('Failed to save after delete:', error);
+          });
+          return updatedRecords;
+        });
       } catch (error) {
         console.error('Failed to delete record:', error);
         throw error;
       }
     },
-    [records]
+    []
   );
 
   // 記録を更新
