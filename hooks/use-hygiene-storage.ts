@@ -35,12 +35,23 @@ export function useHygieneStorage() {
   const [records, setRecords] = useState<HygieneRecord[]>([]);
   const [userInfo, setUserInfo] = useState<UserInfo>({});
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(auth.currentUser);
 
-  // 現在のユーザーを取得
-  const currentUser = auth.currentUser;
+  // 認証状態を監視
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribeAuth();
+  }, []);
 
   // Firestoreから記録をリアルタイムで取得
   useEffect(() => {
+    // 認証状態がまだ確定していない場合は待機
+    if (currentUser === undefined) {
+      return;
+    }
+
     if (!currentUser) {
       // 未ログイン時はローカルストレージを使用
       const loadLocalRecords = async () => {
@@ -48,9 +59,12 @@ export function useHygieneStorage() {
           const data = await AsyncStorage.getItem(STORAGE_KEY);
           if (data) {
             setRecords(JSON.parse(data));
+          } else {
+            setRecords([]);
           }
         } catch (error) {
           console.error('Failed to load local records:', error);
+          setRecords([]);
         } finally {
           setLoading(false);
         }
@@ -59,9 +73,12 @@ export function useHygieneStorage() {
       return;
     }
 
+    let unsubscribeRecords: (() => void) | undefined;
+
     // ユーザー情報を取得してチームIDを確認
     const loadUserAndRecords = async () => {
       try {
+        setLoading(true);
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userDoc = await getDoc(userDocRef);
 
@@ -83,20 +100,26 @@ export function useHygieneStorage() {
             address: userData.address,
             teamId: userData.teamId,
           });
+        } else {
+          // ユーザードキュメントがない場合はデフォルト値
+          setUserInfo({
+            userName: currentUser.email?.split('@')[0],
+            teamId: undefined,
+          });
         }
 
-        // チームの記録をリアルタイムで監視（orderByは複合インデックスが必要なので削除）
+        // チームの記録をリアルタイムで監視
         const recordsQuery = query(
           collection(db, 'records'),
           where('teamId', '==', teamId)
         );
 
-        const unsubscribe = onSnapshot(recordsQuery, (snapshot) => {
+        unsubscribeRecords = onSnapshot(recordsQuery, (snapshot) => {
           const recordsList: HygieneRecord[] = [];
-          snapshot.forEach((doc) => {
-            const data = doc.data();
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
             recordsList.push({
-              id: doc.id,
+              id: docSnap.id,
               timing: data.timing,
               action: data.action,
               timestamp: data.timestamp instanceof Timestamp
@@ -113,20 +136,22 @@ export function useHygieneStorage() {
           setLoading(false);
         }, (error) => {
           console.error('Failed to load records from Firestore:', error);
+          setRecords([]);
           setLoading(false);
         });
-
-        return unsubscribe;
       } catch (error) {
         console.error('Failed to load user data:', error);
+        setRecords([]);
         setLoading(false);
       }
     };
 
-    const unsubscribePromise = loadUserAndRecords();
+    loadUserAndRecords();
 
     return () => {
-      unsubscribePromise?.then((unsub) => unsub?.());
+      if (unsubscribeRecords) {
+        unsubscribeRecords();
+      }
     };
   }, [currentUser]);
 
