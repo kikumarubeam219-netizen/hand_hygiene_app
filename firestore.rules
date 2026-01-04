@@ -13,10 +13,9 @@ service cloud.firestore {
         (resource.data.members.hasAny([request.auth.uid]) || resource.data.ownerId == request.auth.uid);
       // 認証済みユーザーは作成可能
       allow create: if request.auth != null;
-      // オーナーまたはメンバーのみ更新可能
-      allow update: if request.auth != null && 
-        (resource.data.members.hasAny([request.auth.uid]) || resource.data.ownerId == request.auth.uid);
-      // オーナーのみ削除可能
+      // オーナー（リーダー）のみ更新可能
+      allow update: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      // オーナー（リーダー）のみ削除可能
       allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
     }
     
