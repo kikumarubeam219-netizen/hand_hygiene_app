@@ -82,7 +82,7 @@ export default function HomeScreen() {
           本日の実施数
         </ThemedText>
         <ThemedText type="title" style={{ fontSize: 32, marginTop: 4 }}>
-          {records.filter((r) => {
+          {loading ? '...' : records.filter((r) => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const tomorrow = new Date(today);

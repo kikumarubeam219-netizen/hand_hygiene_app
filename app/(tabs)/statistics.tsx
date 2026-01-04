@@ -19,7 +19,7 @@ export default function StatisticsScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
-  const { records, getStatistics } = useHygieneStorage();
+  const { records, getStatistics, loading } = useHygieneStorage();
   const [period, setPeriod] = useState<PeriodType>('day');
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [customStartDate, setCustomStartDate] = useState(new Date());
@@ -200,19 +200,19 @@ export default function StatisticsScreen() {
             <View style={styles.statRow}>
               <ThemedText type="default">総実施数</ThemedText>
               <ThemedText type="title" style={{ fontSize: 24, color: colors.tint }}>
-                {stats.total}
+                {loading ? '...' : stats.total}
               </ThemedText>
             </View>
 
             <View style={[styles.statRow, { borderTopColor: colors.border, borderTopWidth: 1, paddingTop: 12 }]}>
               <ThemedText type="default">実施率</ThemedText>
               <ThemedText type="title" style={{ fontSize: 24, color: colors.tint }}>
-                {stats.total > 0
+                {loading ? '...' : stats.total > 0
                   ? Math.round(
-                      ((stats.byAction.hand_sanitizer + stats.byAction.hand_wash) / stats.total) * 100
-                    )
+                    ((stats.byAction.hand_sanitizer + stats.byAction.hand_wash) / stats.total) * 100
+                  )
                   : 0}
-                %
+                {loading ? '' : '%'}
               </ThemedText>
             </View>
           </View>
