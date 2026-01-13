@@ -1,5 +1,5 @@
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState, useCallback } from 'react';
 import {
   collection,
   query,
@@ -12,7 +12,6 @@ import {
   serverTimestamp,
   Timestamp,
   getDoc,
-  setDoc,
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { HygieneRecord, TimingType, ActionType } from '@/lib/types';
@@ -31,29 +30,56 @@ export interface UserInfo {
   teamId?: string;
 }
 
-export function useHygieneStorage() {
+interface HygieneStorageContextType {
+  records: HygieneRecord[];
+  userInfo: UserInfo;
+  loading: boolean;
+  addRecord: (timing: TimingType, action: ActionType, notes?: string, customDate?: Date) => Promise<HygieneRecord>;
+  deleteRecord: (id: string) => Promise<void>;
+  updateRecord: (id: string, updates: Partial<HygieneRecord>) => Promise<void>;
+  saveUserInfo: (info: UserInfo) => Promise<void>;
+  resetAllData: () => Promise<void>;
+  getRecordsByDateRange: (startDate: Date, endDate: Date) => HygieneRecord[];
+  getRecordsByTiming: (timing: TimingType) => HygieneRecord[];
+  getStatistics: (startDate: Date, endDate: Date) => {
+    total: number;
+    byTiming: Record<TimingType, number>;
+    byAction: Record<ActionType, number>;
+    completionRate: number;
+  };
+  createTeam: (teamName: string) => Promise<string>;
+  joinTeam: (teamId: string) => Promise<void>;
+  leaveTeam: () => Promise<void>;
+}
+
+const HygieneStorageContext = createContext<HygieneStorageContextType | null>(null);
+
+export function HygieneStorageProvider({ children }: { children: ReactNode }) {
   const [records, setRecords] = useState<HygieneRecord[]>([]);
   const [userInfo, setUserInfo] = useState<UserInfo>({});
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
+  const [authInitialized, setAuthInitialized] = useState(false);
 
-  // 認証状態を監視
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      console.log('[Auth] State changed:', user ? user.email : 'null');
       setCurrentUser(user);
+      setAuthInitialized(true);
     });
     return () => unsubscribeAuth();
   }, []);
 
-  // Firestoreから記録をリアルタイムで取得
   useEffect(() => {
-    // 認証状態がまだ確定していない場合は待機
-    if (currentUser === undefined) {
+    if (!authInitialized) {
+      console.log('[Storage] Waiting for auth initialization...');
       return;
     }
 
+    console.log('[Storage] Auth initialized, currentUser:', currentUser ? currentUser.email : 'null');
+
     if (!currentUser) {
-      // 未ログイン時はローカルストレージを使用
+      console.log('[Storage] No user, loading from local storage');
       const loadLocalRecords = async () => {
         try {
           const data = await AsyncStorage.getItem(STORAGE_KEY);
@@ -75,21 +101,21 @@ export function useHygieneStorage() {
 
     let unsubscribeRecords: (() => void) | undefined;
 
-    // ユーザー情報を取得してチームIDを確認
     const loadUserAndRecords = async () => {
+      console.log('[Storage] Loading user and records for:', currentUser.uid);
       try {
         setLoading(true);
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userDoc = await getDoc(userDocRef);
+        console.log('[Storage] User doc exists:', userDoc.exists());
 
-        let teamId = currentUser.uid; // デフォルトは自分のUID
+        let teamId = currentUser.uid;
 
         if (userDoc.exists()) {
           const userData = userDoc.data();
           if (userData.teamId) {
             teamId = userData.teamId;
           }
-          // ユーザー情報を設定
           setUserInfo({
             userName: userData.userName || currentUser.email?.split('@')[0],
             facilityName: userData.facilityName,
@@ -101,20 +127,21 @@ export function useHygieneStorage() {
             teamId: userData.teamId,
           });
         } else {
-          // ユーザードキュメントがない場合はデフォルト値
           setUserInfo({
             userName: currentUser.email?.split('@')[0],
             teamId: undefined,
           });
         }
 
-        // チームの記録をリアルタイムで監視
+        console.log('[Storage] Using teamId:', teamId);
+
         const recordsQuery = query(
           collection(db, 'records'),
           where('teamId', '==', teamId)
         );
 
         unsubscribeRecords = onSnapshot(recordsQuery, (snapshot) => {
+          console.log('[Storage] Received snapshot with', snapshot.size, 'records');
           const recordsList: HygieneRecord[] = [];
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
@@ -130,17 +157,16 @@ export function useHygieneStorage() {
               facilityName: data.facilityName,
             });
           });
-          // クライアント側でソート（新しい順）
           recordsList.sort((a, b) => b.timestamp - a.timestamp);
           setRecords(recordsList);
           setLoading(false);
         }, (error) => {
-          console.error('Failed to load records from Firestore:', error);
+          console.error('[Storage] Failed to load records from Firestore:', error);
           setRecords([]);
           setLoading(false);
         });
       } catch (error) {
-        console.error('Failed to load user data:', error);
+        console.error('[Storage] Failed to load user data:', error);
         setRecords([]);
         setLoading(false);
       }
@@ -153,15 +179,13 @@ export function useHygieneStorage() {
         unsubscribeRecords();
       }
     };
-  }, [currentUser]);
+  }, [currentUser, authInitialized]);
 
-  // 新しい記録を追加
   const addRecord = useCallback(
     async (timing: TimingType, action: ActionType, notes?: string, customDate?: Date) => {
       const timestamp = customDate ? customDate.getTime() : Date.now();
 
       if (!currentUser) {
-        // 未ログイン時はローカルストレージに保存
         const newRecord: HygieneRecord = {
           id: Date.now().toString(),
           timing,
@@ -177,9 +201,7 @@ export function useHygieneStorage() {
         return newRecord;
       }
 
-      // ログイン時はFirestoreに保存
       try {
-        // チームIDを取得
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userDoc = await getDoc(userDocRef);
         let teamId = currentUser.uid;
@@ -216,11 +238,9 @@ export function useHygieneStorage() {
     [currentUser, records, userInfo]
   );
 
-  // 記録を削除
   const deleteRecord = useCallback(
     async (id: string) => {
       if (!currentUser) {
-        // 未ログイン時はローカルストレージから削除
         setRecords((prevRecords) => {
           const updatedRecords = prevRecords.filter((r) => r.id !== id);
           AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRecords)).catch((error) => {
@@ -231,7 +251,6 @@ export function useHygieneStorage() {
         return;
       }
 
-      // ログイン時はFirestoreから削除
       try {
         await deleteDoc(doc(db, 'records', id));
       } catch (error) {
@@ -242,18 +261,15 @@ export function useHygieneStorage() {
     [currentUser]
   );
 
-  // 記録を更新
   const updateRecord = useCallback(
     async (id: string, updates: Partial<HygieneRecord>) => {
       if (!currentUser) {
-        // 未ログイン時はローカルストレージを更新
         const updatedRecords = records.map((r) => (r.id === id ? { ...r, ...updates } : r));
         setRecords(updatedRecords);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRecords));
         return;
       }
 
-      // ログイン時はFirestoreを更新
       try {
         await updateDoc(doc(db, 'records', id), updates);
       } catch (error) {
@@ -264,7 +280,6 @@ export function useHygieneStorage() {
     [currentUser, records]
   );
 
-  // ユーザー情報を保存
   const saveUserInfo = useCallback(async (info: UserInfo) => {
     setUserInfo(info);
 
@@ -273,7 +288,6 @@ export function useHygieneStorage() {
       return;
     }
 
-    // Firestoreにも保存
     try {
       await updateDoc(doc(db, 'users', currentUser.uid), {
         userName: info.userName || null,
@@ -286,19 +300,16 @@ export function useHygieneStorage() {
       });
     } catch (error) {
       console.error('Failed to save user info to Firestore:', error);
-      // ローカルにも保存
       await AsyncStorage.setItem(USER_INFO_KEY, JSON.stringify(info));
     }
   }, [currentUser]);
 
-  // チームを作成
   const createTeam = useCallback(async (teamName: string) => {
     if (!currentUser) {
-      throw new Error('ログインが必要です');
+      throw new Error('Login required');
     }
 
     try {
-      // チームを作成
       const teamRef = await addDoc(collection(db, 'teams'), {
         name: teamName,
         ownerId: currentUser.uid,
@@ -306,7 +317,6 @@ export function useHygieneStorage() {
         createdAt: serverTimestamp(),
       });
 
-      // ユーザーにチームIDを設定
       await updateDoc(doc(db, 'users', currentUser.uid), {
         teamId: teamRef.id,
       });
@@ -319,20 +329,17 @@ export function useHygieneStorage() {
     }
   }, [currentUser]);
 
-  // チームに参加
   const joinTeam = useCallback(async (teamId: string) => {
     if (!currentUser) {
-      throw new Error('ログインが必要です');
+      throw new Error('Login required');
     }
 
     try {
-      // チームが存在するか確認
       const teamDoc = await getDoc(doc(db, 'teams', teamId));
       if (!teamDoc.exists()) {
-        throw new Error('チームが見つかりません');
+        throw new Error('Team not found');
       }
 
-      // チームにメンバーを追加
       const teamData = teamDoc.data();
       const members = teamData.members || [];
       if (!members.includes(currentUser.uid)) {
@@ -340,7 +347,6 @@ export function useHygieneStorage() {
         await updateDoc(doc(db, 'teams', teamId), { members });
       }
 
-      // ユーザーにチームIDを設定
       await updateDoc(doc(db, 'users', currentUser.uid), {
         teamId: teamId,
       });
@@ -352,14 +358,12 @@ export function useHygieneStorage() {
     }
   }, [currentUser]);
 
-  // チームから離脱
   const leaveTeam = useCallback(async () => {
     if (!currentUser || !userInfo.teamId) {
       return;
     }
 
     try {
-      // ユーザーからチームIDを削除
       await updateDoc(doc(db, 'users', currentUser.uid), {
         teamId: null,
       });
@@ -371,7 +375,6 @@ export function useHygieneStorage() {
     }
   }, [currentUser, userInfo.teamId]);
 
-  // すべてのデータをリセット
   const resetAllData = useCallback(async () => {
     try {
       await AsyncStorage.multiRemove([STORAGE_KEY, USER_INFO_KEY]);
@@ -383,7 +386,6 @@ export function useHygieneStorage() {
     }
   }, []);
 
-  // 日付範囲内の記録を取得
   const getRecordsByDateRange = useCallback(
     (startDate: Date, endDate: Date) => {
       const startTime = startDate.getTime();
@@ -393,7 +395,6 @@ export function useHygieneStorage() {
     [records]
   );
 
-  // タイミング別の記録を取得
   const getRecordsByTiming = useCallback(
     (timing: TimingType) => {
       return records.filter((r) => r.timing === timing);
@@ -401,7 +402,6 @@ export function useHygieneStorage() {
     [records]
   );
 
-  // 統計情報を計算
   const getStatistics = useCallback(
     (startDate: Date, endDate: Date) => {
       const rangeRecords = getRecordsByDateRange(startDate, endDate);
@@ -412,13 +412,11 @@ export function useHygieneStorage() {
         completionRate: 0,
       };
 
-      // タイミング別集計
       for (let i = 1; i <= 5; i++) {
         const timing = i as TimingType;
         stats.byTiming[timing] = rangeRecords.filter((r) => r.timing === timing).length;
       }
 
-      // アクション別集計
       stats.byAction.hand_sanitizer = rangeRecords.filter(
         (r) => r.action === 'hand_sanitizer'
       ).length;
@@ -430,7 +428,7 @@ export function useHygieneStorage() {
     [getRecordsByDateRange]
   );
 
-  return {
+  const value: HygieneStorageContextType = {
     records,
     userInfo,
     loading,
@@ -446,4 +444,19 @@ export function useHygieneStorage() {
     joinTeam,
     leaveTeam,
   };
+
+  return (
+    <HygieneStorageContext.Provider value={value}>
+      {children}
+    </HygieneStorageContext.Provider>
+  );
 }
+
+export function useHygieneStorage() {
+  const context = useContext(HygieneStorageContext);
+  if (!context) {
+    throw new Error('useHygieneStorage must be used within a HygieneStorageProvider');
+  }
+  return context;
+}
+
